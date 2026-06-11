@@ -1056,3 +1056,69 @@ Week 8:    端到端集成测试
 | DB 选型 | Neon PostgreSQL（与现有栈一致） |
 | 日志策略 | 白名单字段，非黑名单 |
 | Business 定价 | 建议 V2 GA 时调整为 $15/月 |
+
+---
+
+## 17. 评审意见与待修复风险点
+
+文档版本：v1.0 评审附录  
+评审日期：2026-06-11  
+评审角色：高级产品经理 + Google Workspace 插件架构 + 隐私安全  
+评审结论：**方向正确，可进入 PoC；正式开发前须先修复本节 P0 项并完成待确认项。**
+
+### 17.1 总体结论
+
+本版技术方案已较好对齐「V2 Cloud Monitoring 全面替换 Apps Script 执行模式」的产品决策，组件边界、数据模型、流程图、PoC 清单和实施计划具备可执行性。但当前文档仍存在 **3 项 P0** 与若干 **P1** 问题；研发经理修订文档时应优先处理本节内容，再进入 Phase 2 正式开发。
+
+### 17.2 关键风险点（P0 / P1）
+
+| ID | 严重级别 | 涉及章节 | 问题 | 影响 | 建议修复 |
+|---|---|---|---|---|---|
+| R-01 | **P0** | §6.1 | 存量 V1 trigger 在 V2 注册成功**之前**即被删除 | OAuth、register 或 watch 创建失败时，用户原有通知链路直接中断 | 仅检测并提示旧 trigger；**待 `POST /v2/forms/register` 成功且 `watches.create` 成功、状态变为 `connected` 后再删除旧 trigger** |
+| R-02 | **P0** | §6.7 | 迁移流程先 `PropertiesService` 清除本地配置，再读取旧配置 | 用户原有 Webhook、模板、Conditions 丢失，无法预填迁移 | 顺序改为：**读取并缓存旧配置 → 注册 V2 → 成功后删除 trigger → 成功后清理本地 Properties** |
+| R-03 | **P0** | §6.3、§9.1 | `response_deliveries` 使用 `unique(form_db_id, response_id)` + `INSERT_OR_IGNORE`；`retryable_error` 后下次 job 会因记录已存在而 `continue` 跳过 | Slack 429/5xx 后消息可能**永久不重发** | 幂等 claim 须区分终态（`sent`/`skipped`/`permanent_error`）与可重试态（`retryable_error`）；后者在 `available_at` 到期后须允许重新 claim 并递增 `attempt_count` |
+| R-04 | P1 | §6.7 | 迁移流程允许用户「取消」并「保持现有 trigger，不迁移」 | 与「V2 全面替换、无 Local Mode」表述冲突 | 改为：暂不迁移则该 Form **不由新版 FormAlert 保证交付**；不承诺旧 trigger 继续受支持 |
+| R-05 | P1 | §4.3、§6.5 | `forms.status` 枚举无 `deleted`，但 Delete 流程写入 `status=deleted` | 数据模型与流程不一致 | 在 `forms.status` 增加 `deleted`，或 Delete 后硬删除 `forms` 行并仅保留审计表 |
+| R-06 | P1 | §7.1 | Watch 状态机出现 `needs_reconnect`，但 `form_watches.state` 枚举无此值 | Watch 层与 Form 层状态混淆 | `needs_reconnect` 仅属于 `forms.status`；`form_watches.state` 保持 `active` / `suspended` / `expired` / `deleting` |
+| R-07 | P1 | §13 | Free「每月 30 次」无对应数据模型与 Worker 扣减流程 | 套餐限制无法在后端执行 | 新增 `usage_counters` 或等价表；Slack `sent` 成功后按自然月扣减；超限返回明确错误 |
+| R-08 | P1 | §11.3 | Add-on → Control Plane 依赖 `ScriptApp.getIdentityToken()`，尚未在 PoC 中验证 | audience、`sub` 绑定可能不可用，导致全链路 API 认证失败 | 保留为 Phase 0 阻塞项（POC-02）；验证失败须有备选方案（如短期 session token） |
+
+### 17.3 待研发经理确认的事项
+
+| ID | 优先级 | 待确认项 | 说明 |
+|---|---|---|---|
+| C-01 | **P0** | `forms.body.readonly` 是否为 Restricted scope | 若需 CASA 第三方安全审计，上线周期可能延长 2–6 个月 |
+| C-02 | **P0** | `ScriptApp.getIdentityToken()` 能否作为 Add-on → Control Plane 稳定身份凭证 | 须验证 audience、`sub` 与 FormAlert account 绑定 |
+| C-03 | P1 | Neon PostgreSQL + Cloud KMS 集成方案 | 网络、延迟、连接池、IAM；Phase 0 PoC 实测 |
+| C-04 | P1 | Free 套餐是否确认为「每月 30 次」自然月重置 | 影响 Pricing 文案、成本模型与 `usage_counters` 设计 |
+| C-05 | P1 | Business 定价是否调整为 $15/月（或 $149/年） | 当前 §16 为建议值，须产品定价确认 |
+| C-06 | P1 | 存量 V1 用户「暂不迁移」的产品策略 | V2 全面替换下，是否允许旧 trigger 继续运行及支持边界 |
+
+### 17.4 文档修订优先级（供研发经理）
+
+```text
+修订顺序建议：
+1. 修复 §6.1 / §6.7 的 trigger 删除时机与 Properties 读写顺序（R-01、R-02）
+2. 重写 §9.1 幂等 claim 逻辑，明确 retryable_error 可重试（R-03）
+3. 对齐 §4.3 forms.status 与 §6.5 Delete 流程（R-05）
+4. 修正 §7.1 Watch 状态机，移除 form_watches 层的 needs_reconnect（R-06）
+5. 补充 Free 配额数据模型与扣减流程（R-07）
+6. 明确迁移「取消」分支的产品文案（R-04）
+7. 在 Phase 0 完成 C-01、C-02 书面结论后再锁定 §11 API 认证终稿
+```
+
+### 17.5 已确认无需大改的方向
+
+以下方向评审通过，修订时保持：
+
+- V2 全面替换 Apps Script 执行；Add-on 仅 UI + OAuth + 状态展示
+- Pub/Sub push ingress → pg-boss → Worker 异步处理架构
+- response 仅 Worker 内存短暂处理、不落库
+- refresh token、Webhook、模板、Conditions 必须 KMS 加密存储
+- Dashboard 仅展示已注册 Forms，不扫描 Drive
+- Pause 释放名额；response 更新首版不重发
+- PoC 18 项验收清单与 Phase 0–4 分阶段计划
+
+---
+
+*本节为 2026-06-11 评审附录，供研发经理据此修订主文档。修订完成后建议将主文档版本升至 v1.1 并更新 §23 评审记录。*
