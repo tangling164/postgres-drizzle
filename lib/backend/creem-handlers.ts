@@ -56,7 +56,7 @@ export async function handleCreemEvent(event: CreemEvent): Promise<{ note: strin
 async function handlePaid(
   event: Extract<CreemEvent, { kind: 'paid' }>
 ): Promise<{ note: string }> {
-  const sql = getSql()
+  const sql = getSql({ transaction: true })
 
   if (await isTombstonedSubscription(event.subscriptionId)) {
     return { note: 'tombstoned subscription; event swallowed' }
@@ -86,7 +86,6 @@ async function handlePaid(
     const existing = await tx`
       SELECT id, license_email_sent_at FROM orders
       WHERE creem_order_id = ${event.orderId}
-      FOR UPDATE
     `
 
     if (existing.length > 0) {
@@ -155,7 +154,7 @@ async function handlePaid(
 async function handleRenewal(
   event: Extract<CreemEvent, { kind: 'paid' }>
 ): Promise<{ note: string }> {
-  const sql = getSql()
+  const sql = getSql({ transaction: true })
   const newValidUntil =
     event.periodEnd ??
     new Date(Date.now() + BILLING_CYCLE_DAYS[event.billingCycle] * 24 * 60 * 60 * 1000)
@@ -167,7 +166,6 @@ async function handleRenewal(
       WHERE creem_subscription_id = ${event.subscriptionId}
       ORDER BY created_at DESC
       LIMIT 1
-      FOR UPDATE
     `
     if (licenses.length === 0) {
       return { note: 'renewal for unknown subscription; ignored' }
@@ -273,13 +271,11 @@ async function handlePaymentFailed(
 async function handleRefundOrDispute(
   event: Extract<CreemEvent, { kind: 'refund_or_dispute' }>
 ): Promise<{ note: string }> {
-  const sql = getSql()
-
+  const sql = getSql({ transaction: true })
   const result = await sql.begin(async (tx) => {
     const orders = await tx`
       SELECT id, buyer_email, plan FROM orders
       WHERE creem_order_id = ${event.orderId}
-      FOR UPDATE
     `
     if (orders.length === 0) {
       return { found: false as const, buyerEmail: null, plan: null }

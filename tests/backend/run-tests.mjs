@@ -24,6 +24,7 @@ const SOURCES = [
   'lib/backend/license.ts',
   'lib/backend/activation.ts',
   'lib/backend/entitlement.ts',
+  'lib/backend/creem-catalog.ts',
   'lib/backend/creem.ts',
   'lib/backend/rate-limit.ts',
   'lib/db/client.ts',
@@ -374,8 +375,32 @@ test('paid event with missing plan throws CreemPayloadError', () => {
         eventType: 'checkout.completed',
         object: { order: { id: 'ord_3' }, customer: { email: 'x@example.com' } },
       }),
-    /checkout.completed missing fields/
+    /cannot resolve plan/
   )
+})
+
+test('official Creem checkout.completed sample (Monthly + product ID catalog)', () => {
+  process.env.CREEM_PRODUCT_STANDARD_MONTHLY = 'prod_d1AY2Sadk9YAvLI0pj97f'
+  const event = creem.normalizeCreemEvent({
+    id: 'evt_5WHHcZPv7VS0YUsberIuOz',
+    eventType: 'checkout.completed',
+    object: {
+      id: 'ch_4l0N34kxo16AhRKUHFUuXr',
+      object: 'checkout',
+      order: { id: 'ord_4aDwWXjMLpes4Kj4XqNnUA', amount: 1000, currency: 'EUR' },
+      subscription: { id: 'sub_6pC2lNB6joCRQIZ1aMrTpi' },
+      customer: { email: 'customer@example.com' },
+      product: {
+        id: 'prod_d1AY2Sadk9YAvLI0pj97f',
+        name: 'Monthly',
+        billing_period: 'every-month',
+      },
+    },
+  })
+  assert.equal(event.kind, 'paid')
+  assert.equal(event.plan, 'standard')
+  assert.equal(event.billingCycle, 'monthly')
+  delete process.env.CREEM_PRODUCT_STANDARD_MONTHLY
 })
 
 test('subscription.active is ignored (Creem sync-only event)', () => {

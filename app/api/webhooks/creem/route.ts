@@ -53,7 +53,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'payload_error', message: error.message }, { status: 500 })
     }
     const message = error instanceof Error ? error.message : String(error)
-    console.error('[creem-webhook] processing failed:', message)
-    return NextResponse.json({ error: 'processing_failed', message }, { status: 500 })
+    const pgCode =
+      error && typeof error === 'object' && 'code' in error
+        ? String((error as { code: unknown }).code)
+        : undefined
+    console.error(
+      '[creem-webhook] processing failed:',
+      message,
+      pgCode ? `(pg:${pgCode})` : ''
+    )
+    return NextResponse.json(
+      {
+        error: 'processing_failed',
+        message,
+        hint:
+          pgCode === '42P01'
+            ? 'Database tables missing — run pnpm migrate against production Neon'
+            : undefined,
+      },
+      { status: 500 }
+    )
   }
 }

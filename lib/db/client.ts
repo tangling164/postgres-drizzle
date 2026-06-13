@@ -1,31 +1,65 @@
 /**
  * Lazy Postgres client for Vercel serverless (Phase 1 data access layer).
  *
- * Phase 1 uses explicit SQL via the `postgres` tagged-template client so the
- * row locks / conditional updates match the spec SQL one-to-one
- * (Full_Backend_Spec v4.1 §5.1 / §5.2). The connection is created on first
- * use, never at module import, so builds and tests run without a database.
+ * - Runtime queries: DATABASE_URL (Neon pooled / PgBouncer).
+ * - Transactions (webhook idempotency): POSTGRES_URL_NON_POOLING when set,
+ *   because FOR UPDATE + sql.begin is unreliable on pooler transaction mode.
+ * - Strips channel_binding=require — breaks some serverless postgres clients.
  */
 import postgres from 'postgres'
 
 type Sql = ReturnType<typeof postgres>
 
-let client: Sql | null = null
+let pooledClient: Sql | null = null
+let directClient: Sql | null = null
 
-export function getSql(): Sql {
-  if (client) return client
+function sanitizeConnectionString(connectionString: string): string {
+  try {
+    const parsed = new URL(connectionString)
+    parsed.searchParams.delete('channel_binding')
+    return parsed.toString()
+  } catch {
+    return connectionString.replace(/([?&])channel_binding=[^&]*&?/g, '$1').replace(/[?&]$/, '')
+  }
+}
+
+function createClient(connectionString: string): Sql {
+  return postgres(sanitizeConnectionString(connectionString), {
+    ssl: 'require',
+    max: 1,
+    prepare: false,
+  })
+}
+
+export interface GetSqlOptions {
+  /** Use Neon direct connection for multi-statement transactions. */
+  transaction?: boolean
+}
+
+export function getSql(options: GetSqlOptions = {}): Sql {
+  if (options.transaction) {
+    if (directClient) return directClient
+    const connectionString =
+      process.env.POSTGRES_URL_NON_POOLING ??
+      process.env.DATABASE_URL ??
+      process.env.POSTGRES_URL
+    if (!connectionString) {
+      throw new Error(
+        'Database URL is not configured (set DATABASE_URL or POSTGRES_URL_NON_POOLING)'
+      )
+    }
+    directClient = createClient(connectionString)
+    return directClient
+  }
+
+  if (pooledClient) return pooledClient
   const connectionString =
     process.env.DATABASE_URL ?? process.env.POSTGRES_URL
   if (!connectionString) {
     throw new Error('DATABASE_URL is not configured')
   }
-  client = postgres(connectionString, {
-    ssl: 'require',
-    // Pooled (PgBouncer) endpoint expected; keep per-instance connections low.
-    max: 1,
-    prepare: false,
-  })
-  return client
+  pooledClient = createClient(connectionString)
+  return pooledClient
 }
 
 export type { Sql }
