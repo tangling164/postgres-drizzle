@@ -8,9 +8,13 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint \"app/**/*.{ts,tsx}\" \"components/**/*.{ts,tsx}\" \"lib/**/*.{ts,tsx}\"",
+    "migrate": "node scripts/migrate.mjs",
+    "test:plugin": "node apps-script/tests/run-tests.js",
+    "test:backend": "node tests/backend/run-tests.mjs"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
     "@types/ms": "^0.7.32",
     "@types/node": "20.8.3",
     "@types/react": "^19.0.0",

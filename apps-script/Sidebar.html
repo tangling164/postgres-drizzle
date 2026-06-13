@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="utf-8">
+  <style>
+    :root {
+      --ink: #202124;
+      --muted: #6b7080;
+      --line: #dfe2ea;
+      --surface: #f7f7fa;
+      --violet: #5a35c8;
+      --violet-dark: #4727a8;
+      --violet-soft: #efecfb;
+      --green: #18864b;
+      --green-soft: #eaf7ef;
+      --red: #bd3636;
+      --red-soft: #fff0f0;
+      --amber: #8a5b00;
+      --amber-soft: #fff7e5;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-width: 0;
+      overflow-x: hidden;
+      color: var(--ink);
+      background: var(--surface);
+      font: 13px/1.45 Arial, sans-serif;
+    }
+    button, input, select, textarea { font: inherit; }
+    button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, a:focus-visible {
+      outline: 3px solid rgba(90, 53, 200, .2);
+      outline-offset: 1px;
+    }
+    main { min-height: 100vh; padding: 14px; }
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 0; font-size: 18px; }
+    h2 { margin-bottom: 10px; font-size: 14px; }
+    h3 { margin-bottom: 3px; font-size: 13px; }
+    p { color: var(--muted); }
+    .loading {
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+    }
+    .stack { display: grid; gap: 12px; }
+    .row, .view-header, .toolbar, .pager, .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .view-header { margin-bottom: 14px; }
+    .section {
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+    }
+    .section-flat {
+      padding: 11px 0;
+      border-top: 1px solid var(--line);
+    }
+    .section-flat:first-child { border-top: 0; padding-top: 0; }
+    .section-flat:last-child { padding-bottom: 0; }
+    .meta { color: var(--muted); font-size: 11px; }
+    .value { font-weight: 700; }
+    .field { display: grid; gap: 5px; }
+    .field label { font-size: 11px; font-weight: 700; }
+    input, select, textarea {
+      width: 100%;
+      border: 1px solid #cfd3dd;
+      border-radius: 6px;
+      background: white;
+      color: var(--ink);
+      padding: 9px 10px;
+    }
+    textarea { min-height: 164px; resize: vertical; line-height: 1.5; }
+    textarea.payload { min-height: 220px; font: 11px/1.5 Consolas, monospace; }
+    .button {
+      min-height: 38px;
+      padding: 0 13px;
+      border: 1px solid transparent;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-weight: 700;
+      cursor: pointer;
+      text-decoration: none;
+      white-space: nowrap;
+      transition: color .16s ease, background-color .16s ease, border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .button svg { width: 16px; height: 16px; flex: 0 0 auto; }
+    .button:active { transform: translateY(1px); }
+    .button:hover:not([disabled]) { box-shadow: 0 3px 10px rgba(32, 33, 36, .12); transform: translateY(-1px); }
+    .button-primary { color: white; background: var(--violet); }
+    .button-primary:hover { background: var(--violet-dark); }
+    .button-secondary { border-color: #cfd3dd; background: white; color: var(--ink); }
+    .button-secondary:hover { border-color: var(--violet); background: var(--violet-soft); color: var(--violet-dark); }
+    .button-text { min-height: 30px; padding: 0; background: transparent; color: var(--violet); }
+    .button-text:hover { color: var(--violet-dark); text-decoration: underline; }
+    .button-danger { border-color: #efc7c7; background: white; color: var(--red); }
+    .button-danger:hover { border-color: var(--red); background: var(--red-soft); }
+    .button-wide { width: 100%; }
+    .button-small { min-height: 30px; padding: 0 9px; font-size: 11px; }
+    .button[disabled] { opacity: .5; cursor: not-allowed; }
+    .plan-line { display: flex; justify-content: space-between; gap: 12px; margin-top: 8px; }
+    .form-usage { color: var(--violet); font-weight: 800; }
+    .notification {
+      padding: 11px 0;
+      border-top: 1px solid var(--line);
+    }
+    .notification:first-child { border-top: 0; padding-top: 0; }
+    .notification:last-child { padding-bottom: 0; }
+    .notification-actions { display: flex; gap: 6px; margin-top: 8px; }
+    .empty { padding: 18px 0; text-align: center; color: var(--muted); }
+    .search, .license-form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+    .pager { margin-top: 12px; color: var(--muted); }
+    .message-type-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+    .tabs { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+    .tab { min-height: 38px; border: 0; background: white; color: var(--muted); font-weight: 700; cursor: pointer; }
+    .tab.active { background: var(--violet); color: white; }
+    .tab:hover:not(.active) { background: var(--violet-soft); color: var(--violet-dark); }
+    .test-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .inline-help { margin: 5px 0 0; font-size: 11px; color: var(--muted); }
+    .condition-card {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+    .condition-card p { margin: 4px 0 0; font-size: 11px; }
+    .help-links { display: grid; gap: 8px; }
+    .help-links a, .help-links button { color: var(--violet); font-weight: 700; text-decoration: none; }
+    .help-links button { padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+    .debug-log { padding: 8px 0; border-top: 1px solid var(--line); font-size: 11px; }
+    .debug-log:first-child { border-top: 0; }
+    #flash-region {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+    }
+    .flash {
+      margin: 8px 10px 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      background: white;
+      box-shadow: 0 4px 14px rgba(32, 33, 36, .12);
+      color: var(--ink);
+    }
+    .flash.success { border-color: #bde2c9; background: var(--green-soft); color: var(--green); }
+    .flash.warning { border-color: #ecd59b; background: var(--amber-soft); color: var(--amber); }
+    .flash.error { border-color: #efc7c7; background: var(--red-soft); color: var(--red); }
+    .flash-close { border: 0; padding: 0; color: inherit; background: transparent; font-weight: 800; cursor: pointer; }
+    .modal-backdrop {
+      position: fixed;
+      z-index: 30;
+      inset: 0;
+      padding: 16px;
+      display: grid;
+      place-items: center;
+      background: rgba(32, 33, 36, .42);
+    }
+    .modal {
+      width: 100%;
+      max-width: 330px;
+      max-height: calc(100vh - 32px);
+      overflow: auto;
+      padding: 14px;
+      border-radius: 9px;
+      background: white;
+      box-shadow: 0 14px 40px rgba(32, 33, 36, .24);
+    }
+    @media (max-width: 320px) {
+      .message-type-row, .test-actions, .license-form, .search { grid-template-columns: 1fr; }
+      .notification .row, .condition-card .row { align-items: flex-start; flex-direction: column; }
+      .button { white-space: normal; text-align: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .button { transition: none; }
+    }
+  </style>
+</head>
+<body>
+  <div id="flash-region" aria-live="polite"></div>
+  <main id="main"><div class="loading">Loading FormAlert...</div></main>
+  <div id="modal-root"></div>
+
+  <script>
+    var state = {
+      view: 'main',
+      bootstrap: null,
+      editor: null,
+      fields: [],
+      usage: null,
+      search: '',
+      page: 1,
+      pageData: null,
+      filterPage: 1,
+      conditionIndex: null,
+      conditionDraft: null,
+      cursor: { message: null, payload: null },
+      activeEditorType: null
+    };
+    var flashTimer = null;
+
+    function server(name) {
+      var args = Array.prototype.slice.call(arguments, 1);
+      return new Promise(function (resolve, reject) {
+        var runner = google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(function (error) { reject(new Error(error && error.message ? error.message : String(error))); });
+        runner[name].apply(runner, args);
+      });
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+
+    function selected(value, expected) {
+      return value === expected ? ' selected' : '';
+    }
+
+    function icon(name) {
+      var paths = {
+        edit: '<path d="M13.5 6.5l4 4M4 20l3.8-.8L18.4 8.6a2.8 2.8 0 0 0-4-4L3.8 15.2 3 19z"/>',
+        delete: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+        pause: '<path d="M8 5v14M16 5v14"/>',
+        resume: '<path d="M7 4l13 8-13 8z"/>',
+        upgrade: '<path d="M12 19V5M6 11l6-6 6 6"/><path d="M5 19h14"/>',
+        refresh: '<path d="M20 7v5h-5M4 17v-5h5"/><path d="M18.5 9A7 7 0 0 0 6.2 6.2L4 8M5.5 15A7 7 0 0 0 17.8 17.8L20 16"/>',
+        external: '<path d="M14 4h6v6M20 4l-9 9"/><path d="M18 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h6"/>'
+      };
+      return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (paths[name] || '') + '</svg>';
+    }
+
+    function showFlash(message, kind) {
+      closeFlash();
+      if (!message) return;
+      kind = kind || 'info';
+      document.getElementById('flash-region').innerHTML =
+        '<div class="flash ' + escapeHtml(kind) + '" role="' + (kind === 'error' ? 'alert' : 'status') + '">' +
+          '<span>' + escapeHtml(message) + '</span>' +
+          (kind === 'error' ? '<button class="flash-close" onclick="closeFlash()" aria-label="Close message">x</button>' : '') +
+        '</div>';
+      var delay = kind === 'error' ? 8000 : kind === 'warning' ? 5000 : 3000;
+      flashTimer = setTimeout(closeFlash, delay);
+    }
+
+    function closeFlash() {
+      if (flashTimer) clearTimeout(flashTimer);
+      flashTimer = null;
+      document.getElementById('flash-region').innerHTML = '';
+    }
+
+    function setLoading(label) {
+      document.getElementById('main').innerHTML = '<div class="loading">' + escapeHtml(label || 'Loading...') + '</div>';
+    }
+
+    async function loadMain(message, kind) {
+      setLoading('Loading FormAlert...');
+      try {
+        state.bootstrap = await server('getSidebarBootstrap');
+        state.view = 'main';
+        renderMain();
+        showFlash(message || state.bootstrap.migrationWarning, message ? kind : state.bootstrap.migrationWarning ? 'warning' : kind);
+      } catch (error) {
+        showFatal(error);
+      }
+    }
+
+    function renderMain() {
+      var data = state.bootstrap;
+      var usage = data.usage;
+      var notifications = data.notifications.length
+        ? data.notifications.map(notificationHtml).join('')
+        : '<div class="empty">No connected Forms yet.</div>';
+      var atFormLimit = data.formCount >= usage.maxForms;
+      var addDisabled = atFormLimit || data.currentFormConnected;
+      var setup = data.currentFormConnected && data.triggerStatus.state === 'needs_setup'
+        ? '<section class="section"><div class="row"><div><h2>Setup needs attention</h2><div class="meta">FormAlert could not finish setup.</div></div><button class="button button-danger button-small" onclick="fixSetup()">Fix setup</button></div></section>'
+        : '';
+
+      document.getElementById('main').innerHTML =
+        '<div class="stack">' +
+          '<section class="section">' +
+            '<div class="meta">Logged in as</div><div class="value">' + escapeHtml(data.userEmail) + '</div>' +
+            '<div class="plan-line"><span><span class="meta">Plan</span><br><strong>' + escapeHtml(usage.label) + '</strong></span><span class="form-usage">' + data.formCount + ' / ' + usage.maxForms + ' Forms</span></div>' +
+          '</section>' +
+          setup +
+          '<section class="section">' +
+            '<div class="row"><h2>Connected Forms</h2><button class="button button-primary button-small" ' + (addDisabled ? 'disabled' : '') + ' onclick="openEditor()">+ Add</button></div>' +
+            (atFormLimit ? '<p class="inline-help">' + escapeHtml(usage.label) + ' supports up to ' + usage.maxForms + ' connected Google Forms.</p>' : '') +
+            notifications +
+            '<button class="button button-text button-wide" onclick="openAll()">View all Forms</button>' +
+          '</section>' +
+          '<section class="section">' +
+            '<div class="row"><h2>Plan & License</h2><a class="button button-secondary button-small" href="https://formalert.app/pricing" target="_blank">' + icon('upgrade') + 'Upgrade</a></div>' +
+            '<div class="license-form"><input id="license-code" placeholder="License code"><button class="button button-secondary" onclick="activateLicense()">Activate</button></div>' +
+          '</section>' +
+          '<section class="section"><h2>Help</h2><div class="help-links">' +
+            '<a href="https://api.slack.com/messaging/webhooks" target="_blank">How to get a Slack Webhook</a>' +
+            '<a href="https://app.slack.com/block-kit-builder/T0B9SHVRGG0/templates" target="_blank">How to use Payload Mode</a>' +
+            '<button onclick="openDebug()">View plugin error logs</button>' +
+          '</div></section>' +
+        '</div>';
+    }
+
+    function notificationHtml(notification) {
+      var action = notification.enabled ? 'Pause' : 'Resume';
+      return '<article class="notification">' +
+        '<h3>' + escapeHtml(notification.formTitle) + '</h3>' +
+        '<div class="notification-actions"><button class="button button-secondary button-small" onclick="editConnectedForm(\'' + escapeHtml(notification.id) + '\',\'' + escapeHtml(notification.formId) + '\',' + notification.isCurrentForm + ')">' + icon('edit') + 'Edit</button>' +
+        '<button class="button button-danger button-small" onclick="removeNotification(\'' + escapeHtml(notification.id) + '\')">' + icon('delete') + 'Delete</button>' +
+        '<button class="button button-secondary button-small" onclick="toggleNotification(\'' + escapeHtml(notification.id) + '\',' + (!notification.enabled) + ')">' + icon(notification.enabled ? 'pause' : 'resume') + action + '</button></div></article>';
+    }
+
+    function editConnectedForm(id, formId, isCurrentForm) {
+      if (isCurrentForm) openEditor(id);
+      else window.open('https://docs.google.com/forms/d/' + encodeURIComponent(formId) + '/edit', '_blank', 'noopener');
+    }
+
+    async function openAll(page) {
+      state.view = 'all';
+      state.page = page || 1;
+      setLoading('Loading connected Forms...');
+      try {
+        state.pageData = await server('getNotificationsPage', state.search, state.page);
+        renderAll();
+      } catch (error) {
+        showFatal(error);
+      }
+    }
+
+    function renderAll() {
+      var data = state.pageData;
+      var items = data.items.length ? data.items.map(notificationHtml).join('') : '<div class="empty">No matching Forms.</div>';
+      document.getElementById('main').innerHTML =
+        '<div class="view-header"><h1>All Connected Forms</h1><button class="button button-text" onclick="loadMain()">Back</button></div>' +
+        '<div class="search"><input id="search-input" value="' + escapeHtml(state.search) + '" placeholder="Search form title"><button class="button button-secondary" onclick="searchNotifications()">Search</button></div>' +
+        '<section class="section" style="margin-top:12px">' + items + '</section>' +
+        '<div class="pager"><span>Page ' + data.page + ' / ' + data.totalPages + '</span><span>' +
+        '<button class="button button-secondary button-small" ' + (data.page <= 1 ? 'disabled' : '') + ' onclick="openAll(' + (data.page - 1) + ')">Prev</button> ' +
+        '<button class="button button-secondary button-small" ' + (data.page >= data.totalPages ? 'disabled' : '') + ' onclick="openAll(' + (data.page + 1) + ')">Next</button></span></div>';
+      document.getElementById('search-input').addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') searchNotifications();
+      });
+    }
+
+    function searchNotifications() {
+      state.search = document.getElementById('search-input').value;
+      openAll(1);
+    }
+
+    async function openEditor(id) {
+      setLoading(id ? 'Loading Form alert...' : 'Preparing Form alert...');
+      try {
+        var data = await server('getEditorData', id || null);
+        state.view = 'editor';
+        state.editor = normalizeEditor(data.notification);
+        state.fields = data.fields;
+        state.usage = data.usage;
+        state.activeEditorType = null;
+        renderEditor();
+      } catch (error) {
+        showFatal(error);
+      }
+    }
+
+    function normalizeEditor(notification) {
+      notification.filter = notification.filter || { match: 'all', conditions: [] };
+      notification.filter.conditions = Array.isArray(notification.filter.conditions) ? notification.filter.conditions : [];
+      notification.filter.conditions.forEach(function (condition, index) {
+        if (!condition.id) condition.id = 'cond_existing_' + index;
+        condition.enabled = true;
+      });
+      return notification;
+    }
+
+    function renderEditor() {
+      state.activeEditorType = null;
+      var notification = state.editor;
+      var editorValue = notification.messageType === 'payload' ? notification.payloadTemplate : notification.messageTemplate;
+      var payloadLink = notification.messageType === 'payload'
+        ? '<a class="button button-secondary" href="https://app.slack.com/block-kit-builder/T0B9SHVRGG0/templates" target="_blank">' + icon('external') + 'Get Payload</a>'
+        : '';
+      var payloadValidation = notification.messageType === 'payload'
+        ? '<button class="button button-secondary button-wide" onclick="validatePayload()">Validate Payload</button>'
+        : '';
+      var count = notification.filter.conditions.length;
+      var filterSummary = count ? count + ' condition' + (count === 1 ? '' : 's') + ' configured' : 'No filters';
+
+      document.getElementById('main').innerHTML =
+        '<div class="view-header"><h1>Configure Slack Alert</h1><button class="button button-text" onclick="loadMain()">Back</button></div>' +
+        '<div class="stack">' +
+          '<section class="section stack">' +
+            '<div class="field"><label>Slack Webhook URL</label><input type="url" value="' + escapeHtml(notification.webhookUrl) + '" placeholder="https://hooks.slack.com/services/..." oninput="state.editor.webhookUrl=this.value"></div>' +
+          '</section>' +
+          '<section class="section stack">' +
+            '<div class="row"><h2>Add Form Field</h2><button class="button button-secondary button-small" onclick="reloadFields()">' + icon('refresh') + 'Refresh Fields</button></div>' +
+            '<select id="field-picker" onchange="insertSelectedField(this.value)">' + fieldOptions('', true) + '</select>' +
+            '<div class="message-type-row"><div class="tabs"><button class="tab ' + (notification.messageType === 'message' ? 'active' : '') + '" aria-pressed="' + (notification.messageType === 'message') + '" onclick="setMessageType(\'message\')">Message</button><button class="tab ' + (notification.messageType === 'payload' ? 'active' : '') + '" aria-pressed="' + (notification.messageType === 'payload') + '" onclick="setMessageType(\'payload\')">Payload</button></div>' + payloadLink + '</div>' +
+            '<div class="field"><textarea id="editor-area" class="' + (notification.messageType === 'payload' ? 'payload' : '') + '" placeholder="Start writing your message here..." onfocus="rememberCursor(this)" onclick="rememberCursor(this)" onkeyup="rememberCursor(this)" onselect="rememberCursor(this)" oninput="updateTemplate(this.value,this)">' + escapeHtml(editorValue) + '</textarea></div>' +
+            payloadValidation +
+          '</section>' +
+          '<section class="section"><div class="row"><div><h2>Filters</h2><div class="meta">' + escapeHtml(filterSummary) + '</div></div><button class="button button-secondary button-small" onclick="openFilters()">Edit filters</button></div></section>' +
+          '<div class="test-actions"><button class="button button-secondary" onclick="testEditor(\'quick\')">Send Test</button><button class="button button-secondary" onclick="testEditor(\'latest\')">Test latest response</button></div>' +
+          '<button class="button button-primary button-wide" onclick="saveEditor()">Save</button>' +
+        '</div>';
+    }
+
+    function setMessageType(type) {
+      state.editor.messageType = type === 'payload' ? 'payload' : 'message';
+      state.activeEditorType = null;
+      renderEditor();
+    }
+
+    function updateTemplate(value, editor) {
+      if (state.editor.messageType === 'payload') state.editor.payloadTemplate = value;
+      else state.editor.messageTemplate = value;
+      if (editor) rememberCursor(editor);
+    }
+
+    function fieldOptions(selectedId, includePlaceholder) {
+      var placeholder = includePlaceholder ? '<option value="">Select form field...</option>' : '';
+      return placeholder + state.fields.map(function (field) {
+        return '<option value="' + escapeHtml(field.fieldId) + '"' + selected(field.fieldId, selectedId) + '>' + escapeHtml(field.fieldTitle) + '</option>';
+      }).join('');
+    }
+
+    function rememberCursor(editor) {
+      if (!editor) return;
+      state.activeEditorType = state.editor.messageType;
+      state.cursor[state.editor.messageType] = {
+        start: editor.selectionStart,
+        end: editor.selectionEnd
+      };
+    }
+
+    function insertSelectedField(fieldId) {
+      var field = state.fields.filter(function (candidate) { return candidate.fieldId === fieldId; })[0];
+      var editor = document.getElementById('editor-area');
+      if (!field || !editor) return;
+      var variable = '{{' + field.fieldTitle + '}}';
+      var cursor = state.activeEditorType === state.editor.messageType ? state.cursor[state.editor.messageType] : null;
+      var start = cursor && typeof cursor.start === 'number' ? cursor.start : editor.value.length;
+      var end = cursor && typeof cursor.end === 'number' ? cursor.end : start;
+      editor.value = editor.value.slice(0, start) + variable + editor.value.slice(end);
+      updateTemplate(editor.value, editor);
+      editor.focus();
+      editor.selectionStart = editor.selectionEnd = start + variable.length;
+      rememberCursor(editor);
+      document.getElementById('field-picker').selectedIndex = 0;
+    }
+
+    async function validatePayload() {
+      try {
+        var result = await server('validatePayloadApi', state.editor.payloadTemplate);
+        var message = result.valid && !result.missingVariables.length ? 'Payload valid.' : result.valid ? 'Payload contains unknown fields.' : result.error;
+        showFlash(message, result.valid && !result.missingVariables.length ? 'success' : result.valid ? 'warning' : 'error');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function reloadFields() {
+      try {
+        state.fields = await server('refreshFields');
+        renderEditor();
+        showFlash('Fields refreshed.', 'success');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    function openFilters(page) {
+      state.view = 'filters';
+      state.filterPage = page || 1;
+      renderFilters();
+    }
+
+    function renderFilters() {
+      var conditions = state.editor.filter.conditions;
+      var totalPages = Math.max(1, Math.ceil(conditions.length / 5));
+      state.filterPage = Math.min(Math.max(1, state.filterPage), totalPages);
+      var pageConditions = conditions.slice((state.filterPage - 1) * 5, state.filterPage * 5);
+      var cards = pageConditions.length ? pageConditions.map(function (condition, pageIndex) {
+        return conditionHtml(condition, (state.filterPage - 1) * 5 + pageIndex);
+      }).join('') : '<div class="empty">No filters. Every new form response will be sent.</div>';
+      var match = conditions.length > 1
+        ? '<div class="field"><label>Match: all / any</label><select onchange="state.editor.filter.match=this.value"><option value="all"' + selected(state.editor.filter.match, 'all') + '>all</option><option value="any"' + selected(state.editor.filter.match, 'any') + '>any</option></select></div>'
+        : '';
+      var atLimit = conditions.length >= state.usage.maxConditions;
+
+      document.getElementById('main').innerHTML =
+        '<div class="view-header"><h1>Filters</h1><button class="button button-text" onclick="renderEditor()">Back</button></div>' +
+        '<div class="stack">' +
+          '<section class="section stack">' + match + cards + '</section>' +
+          '<button class="button button-primary button-wide" ' + (atLimit ? 'disabled' : '') + ' onclick="addCondition()">+ Add Filter</button>' +
+          (atLimit ? '<div class="meta">' + escapeHtml(state.usage.label) + ' allows up to ' + state.usage.maxConditions + ' filters.</div>' : '') +
+          '<div class="pager"><span>Page ' + state.filterPage + ' / ' + totalPages + '</span><span>' +
+            '<button class="button button-secondary button-small" ' + (state.filterPage <= 1 ? 'disabled' : '') + ' onclick="openFilters(' + (state.filterPage - 1) + ')">Prev</button> ' +
+            '<button class="button button-secondary button-small" ' + (state.filterPage >= totalPages ? 'disabled' : '') + ' onclick="openFilters(' + (state.filterPage + 1) + ')">Next</button></span></div>' +
+        '</div>';
+    }
+
+    function conditionHtml(condition, index) {
+      return '<div class="condition-card">' +
+        '<h3>Filter ' + (index + 1) + '</h3><p>' + escapeHtml(conditionSummary(condition)) + '</p>' +
+        '<div class="notification-actions"><button class="button button-secondary button-small" onclick="openCondition(' + index + ')">Edit</button><button class="button button-danger button-small" onclick="deleteCondition(' + index + ')">Delete Filter</button></div>' +
+      '</div>';
+    }
+
+    function conditionSummary(condition) {
+      var symbols = { eq: '=', neq: '\u2260', gt: '>', lt: '<', gte: '>=', lte: '<=', contains: 'contains', text_eq: 'equals' };
+      return (condition.fieldTitle || 'Unknown field') + ' ' + (symbols[condition.operator] || condition.operator) + ' ' + condition.value;
+    }
+
+    function addCondition() {
+      if (state.editor.filter.conditions.length >= state.usage.maxConditions) {
+        showFlash(state.usage.label + ' allows up to ' + state.usage.maxConditions + ' filters.', 'warning');
+        return;
+      }
+      openCondition(null);
+    }
+
+    function openCondition(index) {
+      var field = state.fields[0] || { fieldId: '', fieldTitle: '', fieldType: 'text' };
+      state.conditionIndex = index;
+      state.conditionDraft = index === null
+        ? { id: 'cond_draft_' + new Date().getTime(), enabled: true, fieldId: field.fieldId, fieldTitle: field.fieldTitle, fieldType: field.fieldType, operator: field.fieldType === 'number' ? 'gt' : 'contains', value: '' }
+        : JSON.parse(JSON.stringify(state.editor.filter.conditions[index]));
+      state.conditionDraft.enabled = true;
+      state.view = 'condition';
+      renderCondition();
+    }
+
+    function renderCondition() {
+      var condition = state.conditionDraft;
+      document.getElementById('main').innerHTML =
+        '<div class="view-header"><h1>' + (state.conditionIndex === null ? 'Add Filter' : 'Edit Filter') + '</h1><button class="button button-text" onclick="openFilters()">Back</button></div>' +
+        '<section class="section stack">' +
+          '<div class="field"><label>Field</label><select onchange="changeConditionField(this.value)">' + fieldOptions(condition.fieldId, false) + '</select></div>' +
+          '<div class="field"><label>Operator</label><select onchange="state.conditionDraft.operator=this.value">' + operatorOptions(condition.fieldType, condition.operator) + '</select></div>' +
+          '<div class="field"><label>Value</label><input value="' + escapeHtml(condition.value) + '" oninput="state.conditionDraft.value=this.value"></div>' +
+          '<button class="button button-primary button-wide" onclick="saveCondition()">Save Filter</button>' +
+        '</section>';
+    }
+
+    function operatorOptions(type, current) {
+      var options = type === 'number'
+        ? [['eq', '='], ['neq', '\u2260'], ['gt', '>'], ['lt', '<'], ['gte', '>='], ['lte', '<=']]
+        : [['contains', 'contains'], ['text_eq', 'equals']];
+      return options.map(function (option) {
+        return '<option value="' + option[0] + '"' + selected(current, option[0]) + '>' + escapeHtml(option[1]) + '</option>';
+      }).join('');
+    }
+
+    function changeConditionField(fieldId) {
+      var field = state.fields.filter(function (candidate) { return candidate.fieldId === fieldId; })[0];
+      if (!field) return;
+      state.conditionDraft.fieldId = field.fieldId;
+      state.conditionDraft.fieldTitle = field.fieldTitle;
+      state.conditionDraft.fieldType = field.fieldType;
+      state.conditionDraft.operator = field.fieldType === 'number' ? 'gt' : 'contains';
+      renderCondition();
+    }
+
+    function saveCondition() {
+      var condition = state.conditionDraft;
+      if (!String(condition.value || '').trim()) {
+        showFlash('Enter a value for this condition.', 'warning');
+        return;
+      }
+      if (condition.fieldType === 'number') {
+        var parsed = Number(String(condition.value).replace(/[$,\s]/g, ''));
+        if (!isFinite(parsed)) {
+          showFlash('This condition requires a number.', 'error');
+          return;
+        }
+      }
+      if (state.conditionIndex === null) state.editor.filter.conditions.push(condition);
+      else state.editor.filter.conditions[state.conditionIndex] = condition;
+      if (state.editor.filter.conditions.length < 2) state.editor.filter.match = 'all';
+      state.conditionDraft = null;
+      state.conditionIndex = null;
+      openFilters(Math.ceil(state.editor.filter.conditions.length / 5));
+      showFlash('Filter saved.', 'success');
+    }
+
+    function deleteCondition(index) {
+      if (!confirm('Delete this filter?')) return;
+      state.editor.filter.conditions.splice(index, 1);
+      if (state.editor.filter.conditions.length < 2) state.editor.filter.match = 'all';
+      renderFilters();
+      showFlash('Filter deleted.', 'success');
+    }
+
+    async function saveEditor() {
+      try {
+        var result = await server('saveNotificationApi', state.editor);
+        var needsSetup = result.triggerStatus.state === 'needs_setup';
+        await loadMain(needsSetup ? 'Saved. Setup needs attention.' : 'Saved.', needsSetup ? 'warning' : 'success');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function testEditor(mode) {
+      try {
+        var api = mode === 'latest' ? 'testLatestResponseApi' : 'sendTestApi';
+        var result = await server(api, state.editor);
+        showFlash(result.message, result.status === 'error' ? 'error' : result.status === 'skipped' ? 'warning' : 'success');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function removeNotification(id) {
+      if (!confirm('Delete this Form alert?')) return;
+      try {
+        await server('deleteNotificationApi', id);
+        if (state.view === 'all') {
+          await openAll(state.page);
+          showFlash('Form alert deleted.', 'success');
+        } else {
+          await loadMain('Form alert deleted.', 'success');
+        }
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function toggleNotification(id, enabled) {
+      try {
+        await server('setNotificationEnabledApi', id, enabled);
+        var message = enabled ? 'Form alert resumed.' : 'Form alert paused.';
+        if (state.view === 'all') {
+          await openAll(state.page);
+          showFlash(message, 'success');
+        } else {
+          await loadMain(message, 'success');
+        }
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function fixSetup() {
+      try {
+        var result = await server('fixSetupApi');
+        await loadMain(result.state === 'enabled' ? 'Setup fixed.' : 'Setup still needs attention.', result.state === 'enabled' ? 'success' : 'error');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function activateLicense() {
+      var input = document.getElementById('license-code');
+      try {
+        var usage = await server('activateLicenseApi', input.value);
+        await loadMain(usage.label + ' plan activated.', 'success');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    async function openDebug() {
+      try {
+        var debug = await server('getDebugPanelApi');
+        var logs = debug.recentDebugLogs && debug.recentDebugLogs.length
+          ? debug.recentDebugLogs.map(function (entry) {
+              return '<div class="debug-log"><strong>' + escapeHtml(entry.status) + '</strong> · ' + escapeHtml(entry.reasonCode) + '<br><span class="meta">' + escapeHtml(entry.timestamp || 'No timestamp') + '</span></div>';
+            }).join('')
+          : '<div class="empty">No debug logs yet.</div>';
+        document.getElementById('modal-root').innerHTML =
+          '<div class="modal-backdrop" onclick="closeDebugOnBackdrop(event)"><section class="modal stack" role="dialog" aria-modal="true" aria-labelledby="debug-title">' +
+            '<div class="row"><h1 id="debug-title">Plugin error logs</h1><button class="button button-text" onclick="closeDebug()">Close</button></div>' +
+            '<div class="status-row section-flat"><span>Last status</span><strong>' + escapeHtml(debug.lastStatus || 'No activity yet') + '</strong></div>' +
+            '<div class="status-row section-flat"><span>Last run</span><strong>' + escapeHtml(debug.lastRun || 'No activity yet') + '</strong></div>' +
+            '<div class="status-row section-flat"><span>Last error</span><strong>' + escapeHtml(debug.lastError || 'None') + '</strong></div>' +
+            '<div><h2>Recent debug logs</h2>' + logs + '</div>' +
+            '<button class="button button-secondary button-wide" onclick="copyDebugInfo()">Copy debug info</button>' +
+          '</section></div>';
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    function closeDebug() {
+      document.getElementById('modal-root').innerHTML = '';
+    }
+
+    function closeDebugOnBackdrop(event) {
+      if (event.target.classList.contains('modal-backdrop')) closeDebug();
+    }
+
+    async function copyDebugInfo() {
+      try {
+        var text = await server('copyDebugInfoApi');
+        await copyText(text);
+        showFlash('Debug copied.', 'success');
+      } catch (error) {
+        showFlash(error.message, 'error');
+      }
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+      var textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return Promise.resolve();
+    }
+
+    function showFatal(error) {
+      document.getElementById('main').innerHTML =
+        '<section class="section stack"><h1>FormAlert could not load</h1><p>' + escapeHtml(error.message) + '</p><button class="button button-primary" onclick="loadMain()">Retry</button></section>';
+      showFlash(error.message, 'error');
+    }
+
+    loadMain();
+  </script>
+</body>
+</html>

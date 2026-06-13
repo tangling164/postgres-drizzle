@@ -1,15 +1,39 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
+import { DM_Sans, Manrope } from 'next/font/google'
+import type { Metadata } from 'next'
+import { MarketingFooter, MarketingHeader } from '@/components/site/site-shell'
+import { siteConfig } from '@/components/site/config'
 
-export const metadata = {
-  metadataBase: new URL('https://postgres-drizzle.vercel.app'),
-  title: 'Postgres Demo with Drizzle',
-  description:
-    'A simple Next.js app with a Postgres database and Drizzle as the ORM',
+export const metadata: Metadata = {
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: 'FormAlert for Slack | Filtered Google Forms notifications',
+    template: '%s | FormAlert for Slack',
+  },
+  description: siteConfig.description,
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website',
+    siteName: siteConfig.name,
+    title: 'FormAlert for Slack',
+    description: siteConfig.description,
+    url: '/',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'FormAlert for Slack',
+    description: siteConfig.description,
+  },
 }
 
-const inter = Inter({
-  variable: '--font-inter',
+const dmSans = DM_Sans({
+  variable: '--font-dm-sans',
+  subsets: ['latin'],
+  display: 'swap',
+})
+
+const manrope = Manrope({
+  variable: '--font-manrope',
   subsets: ['latin'],
   display: 'swap',
 })
@@ -21,7 +45,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.variable}>{children}</body>
+      <body className={`${dmSans.variable} ${manrope.variable}`}>
+        <MarketingHeader />
+        {children}
+        <MarketingFooter />
+      </body>
     </html>
   )
 }

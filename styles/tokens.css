@@ -1,0 +1,68 @@
+:root {
+  --color-ink: #171927;
+  --color-muted: #606575;
+  --color-cream: #f6f7fa;
+  --color-paper: #ffffff;
+  --color-violet: #5a35c8;
+  --color-violet-dark: #4626a4;
+  --color-violet-soft: #efecfb;
+  --color-coral: #ef604f;
+  --color-coral-soft: #fff0eb;
+  --color-green: #198754;
+  --color-green-soft: #edf8ef;
+  --color-amber: #a86400;
+  --color-amber-soft: #fff6e5;
+  --color-red: #c73d38;
+  --color-red-soft: #fff0ef;
+  --color-line: #dfe2ea;
+  --color-line-warm: #e5e7ed;
+
+  --font-body: var(--font-dm-sans), sans-serif;
+  --font-display: var(--font-manrope), sans-serif;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-14: 56px;
+  --space-18: 72px;
+
+  --radius-xs: 5px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 8px;
+  --radius-pill: 999px;
+
+  --shadow-window: 0 18px 44px rgba(44, 38, 77, 0.12);
+  --shadow-popover: 0 16px 32px rgba(26, 27, 42, 0.14);
+  --shadow-sidebar: -8px 0 26px rgba(17, 24, 39, 0.08);
+  --shadow-floating: 0 12px 28px rgba(70, 38, 164, 0.22);
+
+  --sidebar-width: 408px;
+  --content-max: 1200px;
+  --hero-max: 1320px;
+
+  /* Compatibility aliases retained for the migrated prototype CSS. */
+  --ink: var(--color-ink);
+  --muted: var(--color-muted);
+  --cream: var(--color-cream);
+  --paper: var(--color-paper);
+  --violet: var(--color-violet);
+  --violet-dark: var(--color-violet-dark);
+  --violet-soft: var(--color-violet-soft);
+  --coral: var(--color-coral);
+  --coral-soft: var(--color-coral-soft);
+  --green: var(--color-green);
+  --green-soft: var(--color-green-soft);
+  --amber: var(--color-amber);
+  --amber-soft: var(--color-amber-soft);
+  --red: var(--color-red);
+  --red-soft: var(--color-red-soft);
+  --line: var(--color-line);
+  --line-warm: var(--color-line-warm);
+  --radius: var(--radius-lg);
+}

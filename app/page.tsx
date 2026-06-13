@@ -1,91 +1,99 @@
-import Image from 'next/image'
-import Link from 'next/link'
-import { Suspense } from 'react'
-import Table from '@/components/table'
-import TablePlaceholder from '@/components/table-placeholder'
-import ExpandingArrow from '@/components/expanding-arrow'
+import {
+  ArrowRight,
+  Bug,
+  ChartLineUp,
+  CheckCircle,
+  Code,
+  FunnelSimple,
+  PaperPlaneTilt,
+  UsersThree,
+} from '@phosphor-icons/react/dist/ssr'
+import type { Metadata } from 'next'
+import { ButtonLink } from '@/components/site/site-shell'
+import { FeatureList, PluginScreenshot, PrivacyStrip, SectionHeading, WorkflowSteps } from '@/components/site/content'
+import { PricingSection } from '@/components/site/pricing'
+import { SoftwareApplicationJsonLd } from '@/components/site/seo'
+import { siteConfig } from '@/components/site/config'
 
-export const dynamic = 'force-dynamic'
+export const metadata: Metadata = {
+  title: 'Filtered Slack notifications for Google Forms',
+  description: 'Add field-based filters to Google Forms Slack notifications. Send only the responses that match your rules.',
+  alternates: { canonical: '/' },
+}
 
-export default function Home() {
+const features = [
+  { icon: <FunnelSimple weight="fill" />, title: 'Filter Rules', text: 'Send only responses that match equals, contains, or greater-than field rules.' },
+  { icon: <Code weight="fill" />, title: 'Message & Payload Mode', text: 'Write Markdown messages or paste official Slack Block Kit payload JSON.' },
+  { icon: <CheckCircle weight="fill" />, title: 'Local Status & Debug', text: 'See the latest status and copy redacted debug info from the add-on.' },
+]
+
+const useCases = [
+  { icon: <ChartLineUp weight="fill" />, title: 'Sales leads', text: 'Notify Slack when a lead meets your budget or qualification threshold.' },
+  { icon: <UsersThree weight="fill" />, title: 'Customer feedback', text: 'Route high-priority feedback and refund requests to the right channel.' },
+  { icon: <Bug weight="fill" />, title: 'Bug reports', text: 'Alert the team only when severity or impact matches your rule.' },
+]
+
+export default function HomePage() {
   return (
-    <main className="relative flex min-h-screen flex-col items-center justify-center">
-      <Link
-        href="https://vercel.com/templates/next.js/postgres-drizzle"
-        className="group mt-20 sm:mt-0 rounded-full flex space-x-1 bg-white/30 shadow-sm ring-1 ring-gray-900/5 text-gray-600 text-sm font-medium px-10 py-2 hover:shadow-lg active:shadow-sm transition-all"
-      >
-        <p>Deploy your own to Vercel</p>
-        <ExpandingArrow />
-      </Link>
-      <h1 className="pt-4 pb-8 bg-gradient-to-br from-black via-[#171717] to-[#4b4b4b] bg-clip-text text-center text-4xl font-medium tracking-tight text-transparent md:text-7xl">
-        Postgres on Vercel
-      </h1>
-      <Suspense fallback={<TablePlaceholder />}>
-        <Table />
-      </Suspense>
-      <p className="font-light text-gray-600 w-full max-w-lg text-center mt-6">
-        Postgres demo with{' '}
-        <Link
-          href="https://github.com/drizzle-team/drizzle-orm"
-          className="font-medium underline underline-offset-4 hover:text-black transition-colors"
-        >
-          Drizzle
-        </Link>{' '}
-        as the ORM. <br /> Built with{' '}
-        <Link
-          href="https://nextjs.org/docs"
-          className="font-medium underline underline-offset-4 hover:text-black transition-colors"
-        >
-          Next.js App Router
-        </Link>
-        .
-      </p>
+    <main>
+      <SoftwareApplicationJsonLd />
+      <section className="landing-hero">
+        <div className="landing-hero-copy">
+          <span className="eyebrow">Filtered Slack alerts for Google Forms</span>
+          <h1>Send important form responses to Slack.</h1>
+          <p>Add field rules in the current Google Form. Matching notifications go directly from Apps Script to your Slack Webhook.</p>
+          <div className="hero-actions">
+            <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert App <PaperPlaneTilt weight="fill" /></ButtonLink>
+            <ButtonLink href="/installation-guide" variant="secondary">View setup guide</ButtonLink>
+          </div>
+        </div>
+        <PluginScreenshot src="/product/rule-editor.png" alt="FormAlert rule editor inside the Google Forms Editor Add-on" caption="Configure a field rule, message, and direct Slack delivery inside the add-on." priority />
+      </section>
 
-      <div className="flex justify-center space-x-5 pt-10 mt-10 border-t border-gray-300 w-full max-w-xl text-gray-600">
-        <Link
-          href="https://postgres-prisma.vercel.app/"
-          className="font-medium underline underline-offset-4 hover:text-black transition-colors"
-        >
-          Prisma
-        </Link>
-        <Link
-          href="https://postgres-starter.vercel.app/"
-          className="font-medium underline underline-offset-4 hover:text-black transition-colors"
-        >
-          Starter
-        </Link>
-        <Link
-          href="https://postgres-kysely.vercel.app/"
-          className="font-medium underline underline-offset-4 hover:text-black transition-colors"
-        >
-          Kysely
-        </Link>
-      </div>
+      <section className="content-section workflow-section">
+        <SectionHeading eyebrow="One focused workflow" title="Filter before you notify." description="FormAlert adds one useful decision between a Google Forms submission and a Slack notification." />
+        <div className="simple-flow"><span>Google Form</span><ArrowRight /><span>Field Filter</span><ArrowRight /><span>Slack notification</span></div>
+      </section>
 
-      <div className="sm:absolute sm:bottom-0 w-full px-20 py-10 flex justify-between">
-        <Link href="https://vercel.com">
-          <Image
-            src="/vercel.svg"
-            alt="Vercel Logo"
-            width={100}
-            height={24}
-            priority
-          />
-        </Link>
-        <Link
-          href="https://github.com/vercel/examples/tree/main/storage/postgres-drizzle"
-          className="flex items-center space-x-2"
-        >
-          <Image
-            src="/github.svg"
-            alt="GitHub Logo"
-            width={24}
-            height={24}
-            priority
-          />
-          <p className="font-light">Source</p>
-        </Link>
-      </div>
+      <section className="content-section">
+        <SectionHeading title="Everything needed to keep Slack useful." />
+        <FeatureList items={features} variant="capabilities" />
+      </section>
+
+      <section className="content-section product-proof">
+        <div>
+          <span className="eyebrow">Inside the add-on</span>
+          <h2>Core work stays with your Google Form.</h2>
+          <p>Webhook setup, question selection, rules, tests, and local debug status all happen inside the Google Forms Editor Add-on. The website exists to help you install, learn, and upgrade.</p>
+          <ButtonLink href="/installation-guide" variant="secondary">See the complete setup</ButtonLink>
+        </div>
+        <PluginScreenshot src="/product/delivery-logs.png" alt="FormAlert local status and debug controls" caption="Last status and redacted debug info stay local to the add-on." />
+      </section>
+
+      <section className="content-section">
+        <SectionHeading title="Useful for the submissions your team needs to act on." />
+        <FeatureList items={useCases} variant="use-cases" />
+      </section>
+
+      <section className="content-section setup-preview">
+        <SectionHeading title="A short path from Google Form to Slack." />
+        <WorkflowSteps items={[
+          { title: 'Open the Google Form', text: 'Open the Form you want to monitor in the Forms editor.' },
+          { title: 'Install FormAlert', text: 'Launch the add-on from the Forms editor add-on button.' },
+          { title: 'Configure and filter', text: 'Add your Slack Webhook, message, and field rule.' },
+          { title: 'Test and enable', text: 'Test with the latest response, then save to enable automatic alerts.' },
+        ]} />
+        <ButtonLink href="/installation-guide" variant="secondary">Read installation guide</ButtonLink>
+      </section>
+
+      <PrivacyStrip />
+
+      <PricingSection />
+
+      <section className="final-cta">
+        <div><h2>Send the responses that deserve attention.</h2><p>Install FormAlert in your current Google Form and create your first field filter.</p></div>
+        <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert App <PaperPlaneTilt weight="fill" /></ButtonLink>
+      </section>
     </main>
   )
 }

@@ -125,6 +125,13 @@ Always reuse existing components before creating a new one.
 - Avoid repeated three-equal-column feature grids, excessive eyebrow labels, generic cards, decorative animation, and warm template-like palettes.
 - Run the taste skill pre-flight checks for CTA contrast, button wrapping, shape consistency, mobile collapse, reduced motion, and page overflow.
 
+## Docs Maintenance Rules
+
+- Update large planning documents (e.g. `docs/FormAlert_Full_Backend_Spec.md`) with precise, located, chunked edits: find the exact section, replace only that fragment, and apply one logical change per edit.
+- Never rewrite a large document in a single whole-file pass; full rewrites stall the task, blow up diffs, and risk silently dropping unrelated sections.
+- When applying a review document, map each review item to a numbered spec section first, then edit section by section in severity order (P0 → P1 → P2).
+- Archive external review files under `docs/` and reference the review filename in the spec's revision header so decisions stay traceable.
+
 ## Verification
 
 Before handing off changes, run:
