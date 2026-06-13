@@ -39,15 +39,21 @@ export async function POST(request: NextRequest) {
   try {
     const event = normalizeCreemEvent(body)
     const result = await handleCreemEvent(event)
-    console.log(`[creem-webhook] ${event.kind}: ${result.note}`)
+    const detail =
+      event.kind === 'ignored'
+        ? event.type
+        : event.kind === 'paid'
+          ? `${event.sourceType} order=${event.orderId} plan=${event.plan}`
+          : event.kind
+    console.log(`[creem-webhook] ${event.kind} (${detail}): ${result.note}`)
     return NextResponse.json({ received: true })
   } catch (error) {
     if (error instanceof CreemPayloadError) {
-      // Known event with missing fields: needs investigation; let Creem retry.
       console.error(`[creem-webhook] payload error: ${error.message}`)
-      return NextResponse.json({ error: 'payload_error' }, { status: 500 })
+      return NextResponse.json({ error: 'payload_error', message: error.message }, { status: 500 })
     }
-    console.error('[creem-webhook] processing failed:', error)
-    return NextResponse.json({ error: 'processing_failed' }, { status: 500 })
+    const message = error instanceof Error ? error.message : String(error)
+    console.error('[creem-webhook] processing failed:', message)
+    return NextResponse.json({ error: 'processing_failed', message }, { status: 500 })
   }
 }

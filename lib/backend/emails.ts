@@ -26,8 +26,13 @@ async function sendEmail({ to, subject, html }: SendEmailInput): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
   const from = process.env.RESEND_FROM_EMAIL
   if (!apiKey || !from) {
-    // Local development without Resend configured: log instead of failing,
-    // so webhook flows remain testable end-to-end.
+    const onVercel = Boolean(process.env.VERCEL)
+    if (onVercel || process.env.NODE_ENV === 'production') {
+      throw new EmailDeliveryError(
+        'RESEND_API_KEY or RESEND_FROM_EMAIL is not configured'
+      )
+    }
+    // Local dev without Resend: log instead of failing.
     console.warn(`[email:skipped] to=${to} subject="${subject}"`)
     return
   }

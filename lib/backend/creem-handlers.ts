@@ -64,7 +64,9 @@ async function handlePaid(
 
   // Renewal detection: an existing license on the same subscription means
   // this paid event extends the period instead of creating a new license.
-  if (event.subscriptionId) {
+  // checkout.completed always mints; subscription.paid only mints when no
+  // license row exists yet (fallback if checkout handler failed earlier).
+  if (event.subscriptionId && event.sourceType === 'subscription.paid') {
     const existingLicenses = await sql`
       SELECT id FROM licenses
       WHERE creem_subscription_id = ${event.subscriptionId}

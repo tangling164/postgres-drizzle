@@ -1,11 +1,10 @@
 /**
  * Creem webhook: signature verification + payload normalization
- * (Full_Backend_Spec v4.1 §4.2 / §4.5). Pure module — unit-testable.
+ * (Full_Backend_Spec v4.1 §4.2 / §4.5).
  *
- * ⚠️ Phase 0 gate (§10.0): exact event names and payload field paths MUST be
- * confirmed against the Creem sandbox before launch. All payload assumptions
- * are isolated in `normalizeCreemEvent` below so sandbox findings require
- * changes in exactly one place.
+ * Payload shapes follow https://docs.creem.io/code/webhooks — Creem product
+ * names are often generic ("Monthly") so plan/cycle resolve via product ID
+ * mapped from NEXT_PUBLIC_CREEM_* checkout URLs.
  */
 import { createHmac } from 'node:crypto'
 import { timingSafeEqualHex } from '@/lib/backend/license'
@@ -36,6 +35,8 @@ export type CreemEvent =
       amountCents: number
       currency: string
       periodEnd: Date | null
+      /** Creem eventType — for logging / dedup hints */
+      sourceType: string
     }
   | { kind: 'cancelled'; subscriptionId: string }
   | { kind: 'payment_failed'; subscriptionId: string | null; buyerEmail: string | null }
@@ -56,14 +57,43 @@ function pick(source: any, paths: string[][]): unknown {
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
-function parsePlan(value: unknown): PaidPlan | null {
+/** Extract `prod_xxx` from a Creem checkout URL env var. */
+export function extractCreemProductIdFromUrl(url: string | undefined): string | null {
+  if (!url) return null
+  const match = url.match(/prod_[A-Za-z0-9]+/)
+  return match?.[0] ?? null
+}
+
+interface ProductCatalogEntry {
+  productId: string
+  plan: PaidPlan
+  billingCycle: BillingCycle
+}
+
+/** Maps Creem product IDs → plan tier using NEXT_PUBLIC_CREEM_* URLs. */
+export function buildCreemProductCatalog(): ProductCatalogEntry[] {
+  const entries: Array<[string | undefined, PaidPlan, BillingCycle]> = [
+    [process.env.NEXT_PUBLIC_CREEM_STANDARD_MONTHLY_URL, 'standard', 'monthly'],
+    [process.env.NEXT_PUBLIC_CREEM_STANDARD_YEARLY_URL, 'standard', 'yearly'],
+    [process.env.NEXT_PUBLIC_CREEM_BUSINESS_MONTHLY_URL, 'business', 'monthly'],
+    [process.env.NEXT_PUBLIC_CREEM_BUSINESS_YEARLY_URL, 'business', 'yearly'],
+  ]
+  const catalog: ProductCatalogEntry[] = []
+  for (const [url, plan, billingCycle] of entries) {
+    const productId = extractCreemProductIdFromUrl(url)
+    if (productId) catalog.push({ productId, plan, billingCycle })
+  }
+  return catalog
+}
+
+function parsePlanFromName(value: unknown): PaidPlan | null {
   const text = String(value ?? '').toLowerCase()
   if (text.includes('business')) return 'business'
   if (text.includes('standard')) return 'standard'
   return null
 }
 
-function parseBillingCycle(value: unknown): BillingCycle | null {
+function parseBillingCycleFromText(value: unknown): BillingCycle | null {
   const text = String(value ?? '').toLowerCase()
   if (text.includes('year') || text === 'annual' || text === 'annually') return 'yearly'
   if (text.includes('month')) return 'monthly'
@@ -76,6 +106,40 @@ function parseDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+function resolveProduct(
+  productId: unknown,
+  productName: unknown,
+  billingPeriod: unknown
+): { plan: PaidPlan; billingCycle: BillingCycle } | null {
+  const id = productId ? String(productId) : null
+  if (id) {
+    for (const entry of buildCreemProductCatalog()) {
+      if (entry.productId === id) {
+        return { plan: entry.plan, billingCycle: entry.billingCycle }
+      }
+    }
+  }
+
+  const plan = parsePlanFromName(productName)
+  const billingCycle = parseBillingCycleFromText(billingPeriod)
+  if (plan && billingCycle) return { plan, billingCycle }
+  return null
+}
+
+function resolveProductFromMetadata(
+  data: Record<string, unknown>
+): { plan: PaidPlan; billingCycle: BillingCycle } | null {
+  const metaPlan = pick(data, [['metadata', 'plan'], ['order', 'metadata', 'plan']])
+  const metaCycle = pick(data, [
+    ['metadata', 'billing_cycle'],
+    ['order', 'metadata', 'billing_cycle'],
+  ])
+  const plan = parsePlanFromName(metaPlan)
+  const billingCycle = parseBillingCycleFromText(metaCycle)
+  if (plan && billingCycle) return { plan, billingCycle }
+  return null
+}
+
 export class CreemPayloadError extends Error {
   constructor(message: string) {
     super(message)
@@ -83,17 +147,136 @@ export class CreemPayloadError extends Error {
   }
 }
 
+function normalizeCheckoutCompleted(
+  data: Record<string, unknown>,
+  sourceType: string
+): CreemEvent {
+  const orderId = pick(data, [['order', 'id'], ['order_id']])
+  const subscriptionRaw = pick(data, [['subscription']])
+  const subscriptionId =
+    typeof subscriptionRaw === 'string'
+      ? subscriptionRaw
+      : pick(data, [['subscription', 'id']])
+        ? String(pick(data, [['subscription', 'id']]))
+        : null
+
+  const buyerEmail = pick(data, [
+    ['customer', 'email'],
+    ['order', 'customer', 'email'],
+    ['email'],
+  ])
+
+  const productId = pick(data, [['product', 'id'], ['order', 'product']])
+  const productName = pick(data, [['product', 'name'], ['order', 'product', 'name']])
+  const billingPeriod = pick(data, [
+    ['product', 'billing_period'],
+    ['subscription', 'billing_period'],
+  ])
+
+  const resolved =
+    resolveProduct(productId, productName, billingPeriod) ??
+    resolveProductFromMetadata(data)
+
+  const periodEnd = parseDate(
+    pick(data, [
+      ['subscription', 'current_period_end_date'],
+      ['subscription', 'current_period_end'],
+      ['current_period_end_date'],
+    ])
+  )
+
+  if (!orderId || !buyerEmail || !resolved) {
+    throw new CreemPayloadError(
+      `checkout.completed missing fields (order=${orderId}, email=${Boolean(
+        buyerEmail
+      )}, productId=${productId}, plan=${resolved?.plan ?? null}, cycle=${
+        resolved?.billingCycle ?? null
+      })`
+    )
+  }
+
+  return {
+    kind: 'paid',
+    orderId: String(orderId),
+    subscriptionId,
+    buyerEmail: String(buyerEmail),
+    plan: resolved.plan,
+    billingCycle: resolved.billingCycle,
+    amountCents: Number(pick(data, [['order', 'amount'], ['amount']]) ?? 0),
+    currency: String(pick(data, [['order', 'currency'], ['currency']]) ?? 'USD'),
+    periodEnd,
+    sourceType,
+  }
+}
+
+function normalizeSubscriptionPaid(
+  data: Record<string, unknown>,
+  sourceType: string
+): CreemEvent {
+  const subscriptionId = pick(data, [['id']])
+  const orderId =
+    pick(data, [['last_transaction_id'], ['order', 'id'], ['order_id']]) ??
+    (subscriptionId ? `${subscriptionId}:initial` : null)
+
+  const buyerEmail = pick(data, [['customer', 'email'], ['email']])
+  const productId = pick(data, [['product', 'id'], ['product']])
+  const productName = pick(data, [['product', 'name']])
+  const billingPeriod = pick(data, [['product', 'billing_period']])
+  const resolved =
+    resolveProduct(productId, productName, billingPeriod) ??
+    resolveProductFromMetadata(data)
+
+  const periodEnd = parseDate(
+    pick(data, [
+      ['current_period_end_date'],
+      ['current_period_end'],
+      ['next_transaction_date'],
+    ])
+  )
+
+  if (!orderId || !buyerEmail || !resolved) {
+    throw new CreemPayloadError(
+      `${sourceType} missing fields (order=${orderId}, email=${Boolean(
+        buyerEmail
+      )}, productId=${productId}, plan=${resolved?.plan ?? null})`
+    )
+  }
+
+  return {
+    kind: 'paid',
+    orderId: String(orderId),
+    subscriptionId: subscriptionId ? String(subscriptionId) : null,
+    buyerEmail: String(buyerEmail),
+    plan: resolved.plan,
+    billingCycle: resolved.billingCycle,
+    amountCents: Number(pick(data, [['product', 'price'], ['amount']]) ?? 0),
+    currency: String(pick(data, [['product', 'currency'], ['currency']]) ?? 'USD'),
+    periodEnd,
+    sourceType,
+  }
+}
+
 /**
- * Maps a raw Creem webhook body to the internal event model. Throws
- * CreemPayloadError when a known event is missing required fields (the route
- * answers 500 so Creem retries while we investigate).
+ * Maps a raw Creem webhook body to the internal event model.
  */
 export function normalizeCreemEvent(body: unknown): CreemEvent {
   const root = body as Record<string, unknown>
   const type = String(root?.eventType ?? root?.type ?? '').toLowerCase()
   const data = (root?.object ?? root?.data ?? {}) as Record<string, unknown>
 
-  const orderId = pick(data, [['order', 'id'], ['order_id'], ['id']])
+  if (type === 'checkout.completed') {
+    return normalizeCheckoutCompleted(data, type)
+  }
+
+  if (type === 'subscription.paid') {
+    return normalizeSubscriptionPaid(data, type)
+  }
+
+  // Creem docs: subscription.active is sync-only; subscription.paid grants access.
+  if (type === 'subscription.active' || type === 'subscription.trialing') {
+    return { kind: 'ignored', type }
+  }
+
   const subscriptionId = pick(data, [
     ['subscription', 'id'],
     ['subscription_id'],
@@ -101,61 +284,10 @@ export function normalizeCreemEvent(body: unknown): CreemEvent {
   ])
 
   if (
-    type === 'checkout.completed' ||
-    type === 'order.paid' ||
-    type === 'subscription.paid' ||
-    type === 'subscription.active' ||
-    type === 'subscription.renewed'
-  ) {
-    const buyerEmail = pick(data, [
-      ['customer', 'email'],
-      ['order', 'customer', 'email'],
-      ['email'],
-    ])
-    const plan =
-      parsePlan(pick(data, [['metadata', 'plan'], ['order', 'metadata', 'plan']])) ??
-      parsePlan(pick(data, [['product', 'name'], ['order', 'product', 'name']]))
-    const billingCycle =
-      parseBillingCycle(
-        pick(data, [['metadata', 'billing_cycle'], ['order', 'metadata', 'billing_cycle']])
-      ) ??
-      parseBillingCycle(
-        pick(data, [['product', 'billing_period'], ['subscription', 'billing_period']])
-      )
-    const periodEnd = parseDate(
-      pick(data, [
-        ['subscription', 'current_period_end_date'],
-        ['subscription', 'current_period_end'],
-        ['current_period_end_date'],
-        ['current_period_end'],
-      ])
-    )
-
-    if (!orderId || !buyerEmail || !plan || !billingCycle) {
-      throw new CreemPayloadError(
-        `paid event missing required fields (type=${type}, order=${orderId}, email=${Boolean(
-          buyerEmail
-        )}, plan=${plan}, cycle=${billingCycle})`
-      )
-    }
-
-    return {
-      kind: 'paid',
-      orderId: String(orderId),
-      subscriptionId: subscriptionId ? String(subscriptionId) : null,
-      buyerEmail: String(buyerEmail),
-      plan,
-      billingCycle,
-      amountCents: Number(pick(data, [['order', 'amount'], ['amount']]) ?? 0),
-      currency: String(pick(data, [['order', 'currency'], ['currency']]) ?? 'USD'),
-      periodEnd,
-    }
-  }
-
-  if (
     type === 'subscription.canceled' ||
     type === 'subscription.cancelled' ||
-    type === 'subscription.expired'
+    type === 'subscription.expired' ||
+    type === 'subscription.scheduled_cancel'
   ) {
     if (!subscriptionId) {
       throw new CreemPayloadError(`cancel event missing subscription id (type=${type})`)

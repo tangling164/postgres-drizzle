@@ -331,6 +331,29 @@ test('checkout.completed normalizes to a paid event', () => {
   assert.equal(event.periodEnd.toISOString(), '2026-07-12T00:00:00.000Z')
 })
 
+test('checkout.completed resolves plan from Creem product ID via checkout URL env', () => {
+  process.env.NEXT_PUBLIC_CREEM_STANDARD_MONTHLY_URL =
+    'https://www.creem.io/test/payment/prod_DQ9TuMZpyUZ6wRk4Hkks'
+  const event = creem.normalizeCreemEvent({
+    eventType: 'checkout.completed',
+    object: {
+      id: 'ch_checkout_id',
+      order: { id: 'ord_creem', amount: 900, currency: 'USD' },
+      subscription: { id: 'sub_creem' },
+      customer: { email: 'buyer@example.com' },
+      product: {
+        id: 'prod_DQ9TuMZpyUZ6wRk4Hkks',
+        name: 'Monthly',
+        billing_period: 'every-month',
+      },
+    },
+  })
+  assert.equal(event.kind, 'paid')
+  assert.equal(event.plan, 'standard')
+  assert.equal(event.billingCycle, 'monthly')
+  delete process.env.NEXT_PUBLIC_CREEM_STANDARD_MONTHLY_URL
+})
+
 test('plan falls back to product name parsing', () => {
   const event = creem.normalizeCreemEvent({
     eventType: 'checkout.completed',
@@ -351,8 +374,41 @@ test('paid event with missing plan throws CreemPayloadError', () => {
         eventType: 'checkout.completed',
         object: { order: { id: 'ord_3' }, customer: { email: 'x@example.com' } },
       }),
-    /paid event missing required fields/
+    /checkout.completed missing fields/
   )
+})
+
+test('subscription.active is ignored (Creem sync-only event)', () => {
+  const event = creem.normalizeCreemEvent({
+    eventType: 'subscription.active',
+    object: { id: 'sub_1', customer: { email: 'a@b.com' } },
+  })
+  assert.equal(event.kind, 'ignored')
+  assert.equal(event.type, 'subscription.active')
+})
+
+test('subscription.paid normalizes with last_transaction_id as order key', () => {
+  process.env.NEXT_PUBLIC_CREEM_BUSINESS_YEARLY_URL =
+    'https://www.creem.io/test/payment/prod_1TYW5ZOi7pDT24Z1AvsoFs'
+  const event = creem.normalizeCreemEvent({
+    eventType: 'subscription.paid',
+    object: {
+      id: 'sub_renew',
+      last_transaction_id: 'tran_abc',
+      customer: { email: 'buyer@example.com' },
+      product: {
+        id: 'prod_1TYW5ZOi7pDT24Z1AvsoFs',
+        name: 'Yearly',
+        billing_period: 'every-year',
+      },
+      current_period_end_date: '2027-01-01T00:00:00Z',
+    },
+  })
+  assert.equal(event.kind, 'paid')
+  assert.equal(event.orderId, 'tran_abc')
+  assert.equal(event.plan, 'business')
+  assert.equal(event.billingCycle, 'yearly')
+  delete process.env.NEXT_PUBLIC_CREEM_BUSINESS_YEARLY_URL
 })
 
 test('cancellation and refund events normalize', () => {
