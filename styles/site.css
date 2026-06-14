@@ -440,10 +440,7 @@ p {
 
 .pricing-page-intro {
   padding-bottom: 0;
-}
-
-.pricing-page-intro .page-hero {
-  padding-bottom: 0;
+  padding-top: 28px;
 }
 
 .final-cta {
@@ -510,8 +507,9 @@ p {
 }
 
 .pricing-table-heading {
-  margin-bottom: 32px;
-  text-align: left;
+  margin: 0 auto 32px;
+  max-width: 640px;
+  text-align: center;
 }
 
 .pricing-table-heading h2 {
@@ -1113,8 +1111,8 @@ p {
 /* ---- Landing Hero v2 (centered) ---- */
 
 .landing-hero-v2 {
-  min-height: calc(100dvh - 68px);
-  padding: 80px 28px 60px;
+  min-height: auto;
+  padding: 80px 28px 72px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1140,6 +1138,7 @@ p {
 
 .hero-actions-centered {
   justify-content: center;
+  margin-top: 28px;
 }
 
 .hero-video-wrap {
@@ -1156,6 +1155,8 @@ p {
   width: 100%;
   height: auto;
   display: block;
+  aspect-ratio: 16 / 9;
+  background: var(--cream);
 }
 
 /* ---- How It Works ---- */
@@ -1177,6 +1178,14 @@ p {
   line-height: 1.18;
   color: var(--ink);
   margin: 0;
+  text-align: center;
+}
+
+.how-it-works-lead {
+  margin: 14px auto 0;
+  max-width: 520px;
+  text-align: center;
+  font-size: 16px;
 }
 
 .how-step {
@@ -1216,6 +1225,12 @@ p {
 
 .how-step-flipped figure {
   order: 1;
+}
+
+.how-it-works-actions {
+  margin-top: 56px;
+  display: flex;
+  justify-content: center;
 }
 
 @media (max-width: 960px) {

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { FAQAccordion } from '@/components/site/faq'
-import { LicenseFlow, PageHero, SectionHeading } from '@/components/site/content'
+import { LicenseFlow, SectionHeading } from '@/components/site/content'
 import { PricingSection } from '@/components/site/pricing'
 import { BreadcrumbJsonLd } from '@/components/site/seo'
 
@@ -15,7 +15,6 @@ export default function PricingPage() {
     <main>
       <div className="page-container pricing-page-intro">
         <BreadcrumbJsonLd items={[{ name: 'Home', path: '/' }, { name: 'Pricing', path: '/pricing' }]} />
-        <PageHero eyebrow="Pricing" title="Simple pricing for filtered Form alerts." description="Start with direct Slack delivery, then upgrade to Standard for Filter Rules and more connected Forms." align="center" />
       </div>
       <PricingSection />
       <div className="page-container">

@@ -57,8 +57,8 @@ export function PricingTable() {
   return (
     <div className="pricing-table-wrap">
       <div className="section-heading pricing-table-heading">
-        <h2 id="pricing-title">Start free, then upgrade with a License Code.</h2>
-        <p>No web account is required. Purchase a plan, receive a License Code, and activate it inside the add-on.</p>
+        <h2 id="pricing-title">Simple, Transparent &amp; Fixed Pricing</h2>
+        <p>Start with 30 Slack notifications for free and upgrade to Standard once you are happy.</p>
       </div>
       <div className="billing-toggle" aria-label="Billing cycle">
         <button aria-pressed={cycle === 'monthly'} className={cycle === 'monthly' ? 'active' : ''} onClick={() => setCycle('monthly')}>Monthly</button>
