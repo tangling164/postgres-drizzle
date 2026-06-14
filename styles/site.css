@@ -60,19 +60,26 @@ p {
   border-bottom: 1px solid var(--line-warm);
   background: rgba(246, 247, 250, 0.92);
   backdrop-filter: blur(14px);
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   gap: 24px;
   position: sticky;
   top: 0;
   z-index: 20;
 }
 
+.marketing-header > a:first-child {
+  justify-self: start;
+  grid-column: 1;
+}
+
 .marketing-header nav {
   display: flex;
   align-items: center;
   gap: 26px;
+  justify-self: center;
+  grid-column: 2;
 }
 
 .marketing-header nav > a {
@@ -1301,6 +1308,11 @@ p {
 }
 
 @media (max-width: 960px) {
+  .marketing-header nav {
+    grid-column: 3;
+    justify-self: end;
+  }
+
   .marketing-header nav > a {
     display: none;
   }
