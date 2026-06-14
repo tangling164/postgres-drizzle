@@ -132,6 +132,10 @@ function reportPath(plan, cycle) {
   return join(repoRoot, 'temp', `m1-acceptance-${plan}-${cycle}-report.json`)
 }
 
+function fullReportPath() {
+  return join(repoRoot, 'temp', 'm1-acceptance-full-report.json')
+}
+
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true })
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, 'utf8')
@@ -444,11 +448,97 @@ async function verifyActivatedPurchase() {
   }
 }
 
+async function summarizeFullSequence() {
+  const email = requireValue(args.email, '--email').toLowerCase()
+  const expectedSkus = [
+    { plan: 'standard', billingCycle: 'monthly', licenseStatus: 'superseded' },
+    { plan: 'standard', billingCycle: 'yearly', licenseStatus: 'superseded' },
+    { plan: 'business', billingCycle: 'monthly', licenseStatus: 'superseded' },
+    { plan: 'business', billingCycle: 'yearly', licenseStatus: 'active' },
+  ]
+  const sql = postgres(databaseUrl(), {
+    ssl: 'require',
+    max: 1,
+    prepare: false,
+    connect_timeout: 10,
+  })
+  try {
+    const rows = await sql`
+      SELECT DISTINCT ON (o.plan, o.billing_cycle)
+             o.creem_order_id, o.plan, o.billing_cycle,
+             o.status AS order_status, o.license_email_status,
+             l.status AS license_status, l.valid_until,
+             l.activated_account_id,
+             a.plan AS account_plan, a.entitlement_status, a.plan_expires_at
+      FROM orders o
+      JOIN licenses l ON l.order_id = o.id
+      LEFT JOIN accounts a ON a.id = l.activated_account_id
+      WHERE lower(o.buyer_email) = ${email}
+      ORDER BY o.plan, o.billing_cycle, o.created_at DESC
+    `
+    assert(rows.length >= expectedSkus.length, 'Not all four paid SKUs were purchased')
+    const skuResults = expectedSkus.map((expected) => {
+      const row = rows.find(
+        (candidate) =>
+          candidate.plan === expected.plan &&
+          candidate.billing_cycle === expected.billingCycle
+      )
+      assert(row, `${expected.plan} ${expected.billingCycle} purchase is missing`)
+      assert(row.order_status === 'completed', `${expected.plan} ${expected.billingCycle} order is not completed`)
+      assert(row.license_email_status === 'delivered', `${expected.plan} ${expected.billingCycle} email is not delivered`)
+      assert(
+        row.license_status === expected.licenseStatus,
+        `${expected.plan} ${expected.billingCycle} license is ${row.license_status}, expected ${expected.licenseStatus}`
+      )
+      return {
+        plan: row.plan,
+        billingCycle: row.billing_cycle,
+        orderId: row.creem_order_id,
+        orderStatus: row.order_status,
+        emailProviderStatus: row.license_email_status,
+        licenseStatus: row.license_status,
+        validUntil: row.valid_until,
+      }
+    })
+    const active = rows.filter((row) => row.license_status === 'active')
+    assert(active.length === 1, `Expected one active license, found ${active.length}`)
+    assert(active[0].plan === 'business', 'Final active license is not Business')
+    assert(active[0].billing_cycle === 'yearly', 'Final active license is not Business Yearly')
+    assert(active[0].account_plan === 'business', 'Final account plan is not Business')
+    assert(active[0].entitlement_status === 'active', 'Final account entitlement is not active')
+    assert(
+      new Date(active[0].valid_until).getTime() === new Date(active[0].plan_expires_at).getTime(),
+      'Final license and account expiry do not match'
+    )
+
+    const report = {
+      status: 'm1_four_sku_sequence_passed',
+      buyer: redactEmail(email),
+      skuResults,
+      finalEntitlement: {
+        plan: active[0].account_plan,
+        billingCycle: active[0].billing_cycle,
+        entitlementStatus: active[0].entitlement_status,
+        activeLicenseCount: active.length,
+        validUntil: active[0].valid_until,
+        paidFeatureContract: paidFeatureContract('business'),
+      },
+      verifiedAt: new Date().toISOString(),
+    }
+    writeJson(fullReportPath(), report)
+    console.log(JSON.stringify(report, null, 2))
+    console.log(`Evidence written: ${fullReportPath()}`)
+  } finally {
+    await sql.end({ timeout: 5 })
+  }
+}
+
 function printHelp() {
   console.log(`Usage:
   pnpm test:m1 -- preflight
   pnpm test:m1 -- observe --plan standard|business --cycle monthly|yearly --email buyer@example.com
   pnpm test:m1 -- verify --plan standard|business --cycle monthly|yearly --email buyer@example.com [--code <EMAIL_CODE>] [--expect-superseded standard|business]
+  pnpm test:m1 -- summary --email buyer@example.com
 
 Run observe before pasting the code into the add-on. After activation, run verify.
 The optional License Code enables an extra plaintext-to-hash assertion and is never printed or stored.`)
@@ -458,6 +548,7 @@ try {
   if (command === 'preflight') await preflight()
   else if (command === 'observe') await observePurchase()
   else if (command === 'verify') await verifyActivatedPurchase()
+  else if (command === 'summary') await summarizeFullSequence()
   else printHelp()
 } catch (error) {
   console.error(`M1 acceptance failed: ${error instanceof Error ? error.message : String(error)}`)

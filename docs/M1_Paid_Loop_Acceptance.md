@@ -64,6 +64,13 @@ Yearly. Every activation must leave exactly one active license. Standard
 Yearly replaces Standard Monthly, Business Monthly upgrades Standard to
 Business, and Business Yearly replaces Business Monthly.
 
+After all four SKUs have been activated in sequence, generate the final
+database-backed evidence report:
+
+```powershell
+pnpm test:m1 -- summary --email buyer@example.com
+```
+
 ## Human Steps
 
 Human assistance remains necessary for completing Creem checkout, reading the
