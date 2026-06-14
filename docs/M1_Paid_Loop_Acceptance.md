@@ -16,7 +16,9 @@ real Apps Script Google OIDC identity.
 - SKU-specific monthly/yearly paid-period assertions
 - Same-tier replacement and Standard-to-Business upgrade assertions
 
-The License Code is never printed or written to disk.
+The License Code is never printed or written to disk. Verification normally
+uses the exact license ID captured before activation. Supplying the plaintext
+code is optional and adds an extra code-to-production-hash assertion.
 
 ## Run
 
@@ -35,9 +37,7 @@ Paste the same code into FormAlert and activate it. Activate it a second time
 to manually confirm same-account idempotency, then run:
 
 ```powershell
-$env:M1_LICENSE_CODE = "<same code from email>"
 pnpm test:m1 -- verify --plan standard --cycle yearly --email buyer@example.com --expect-superseded standard
-Remove-Item Env:M1_LICENSE_CODE
 ```
 
 Continue with Business Monthly:
@@ -49,18 +49,14 @@ pnpm test:m1 -- observe --plan business --cycle monthly --email buyer@example.co
 Activate the Business code inside FormAlert, then run:
 
 ```powershell
-$env:M1_LICENSE_CODE = "<same code from email>"
 pnpm test:m1 -- verify --plan business --cycle monthly --email buyer@example.com --expect-superseded standard
-Remove-Item Env:M1_LICENSE_CODE
 ```
 
 Finish with Business Yearly:
 
 ```powershell
 pnpm test:m1 -- observe --plan business --cycle yearly --email buyer@example.com
-$env:M1_LICENSE_CODE = "<same code from email>"
 pnpm test:m1 -- verify --plan business --cycle yearly --email buyer@example.com --expect-superseded business
-Remove-Item Env:M1_LICENSE_CODE
 ```
 
 The intended sequence is Standard Yearly, Business Monthly, then Business
