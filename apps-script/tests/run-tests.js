@@ -141,6 +141,9 @@ const context = {
     },
     getProjectTriggers: () => triggers,
     requireAllScopes: () => {},
+    getAuthorizationInfo: () => ({
+      getAuthorizationStatus: () => 'NOT_REQUIRED',
+    }),
     getIdentityToken: () => {
       const payload = Buffer.from(JSON.stringify({ aud: 'test-audience' })).toString('base64url')
       return `header.${payload}.signature`
@@ -413,6 +416,13 @@ test('BackendService sends the identity token and LicenseService stores only rem
   setPlan('free')
 })
 
+test('BackendService exposes safe identity diagnostics without exposing the token', () => {
+  const diagnostics = context.BackendService.getIdentityDiagnostics()
+  equal(diagnostics.authorizationStatus, 'NOT_REQUIRED')
+  equal(diagnostics.identityAudience, 'test-audience')
+  equal(JSON.stringify(diagnostics).includes('header.'), false)
+})
+
 test('legacy local Test licenses are retired before cached paid access is read', () => {
   userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN, 'business')
   userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT, '2099-01-01T00:00:00.000Z')
@@ -542,6 +552,7 @@ test('Connected Forms supports unique form IDs, title search, and ten-item pagin
   equal(context.getSidebarBootstrap().notifications.length, 3)
   equal(context.getSidebarBootstrap().userEmail, 'tester@example.com')
   equal(context.getSidebarBootstrap().formCount, 11)
+  equal(context.getSidebarBootstrap().appVersion, '1.7.1-oidc-diagnostic')
 })
 
 test('Business allows 100 connected Forms and paused Forms still count toward the limit', () => {
@@ -953,6 +964,9 @@ test('manifest and source allow only Slack and the FormAlert entitlement API', (
   ok(sidebar.includes('Copy debug info'))
   ok(sidebar.includes('Send Test'))
   ok(sidebar.includes('Test latest response'))
+  ok(sidebar.includes('Plan sync needs attention'))
+  ok(sidebar.includes('Identity audience:'))
+  ok(sidebar.includes('Build '))
   equal(/\bfetch\s*\(|XMLHttpRequest/.test(sidebar), false)
   ok(sidebar.includes('recentDebugLogs'))
   equal(sidebar.includes('renderLogs'), false)

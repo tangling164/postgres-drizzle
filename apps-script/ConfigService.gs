@@ -1,5 +1,5 @@
 var FormAlertConfig = {
-  APP_VERSION: '1.7.0-license-activation',
+  APP_VERSION: '1.7.1-oidc-diagnostic',
   BACKEND_API_URL: 'https://www.formnotifyforslack.com',
   MAX_PROPERTY_BYTES: 9000,
   KEYS: {

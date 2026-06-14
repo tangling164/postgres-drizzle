@@ -20,6 +20,22 @@ var BackendService = {
     }
   },
 
+  getIdentityDiagnostics: function () {
+    var diagnostics = {
+      authorizationStatus: 'unknown',
+      identityAudience: null
+    };
+    try {
+      diagnostics.authorizationStatus = String(
+        ScriptApp.getAuthorizationInfo(ScriptApp.AuthMode.FULL).getAuthorizationStatus()
+      );
+    } catch (error) {}
+    try {
+      diagnostics.identityAudience = this.getIdentityAudience(ScriptApp.getIdentityToken());
+    } catch (error) {}
+    return diagnostics;
+  },
+
   request: function (path, options) {
     options = options || {};
     var identityToken = this.getIdentityToken();

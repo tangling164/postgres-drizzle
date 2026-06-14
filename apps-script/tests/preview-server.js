@@ -26,9 +26,11 @@ const mockScript = `
   };
   const handlers = {
     getSidebarBootstrap: () => ({
-      appVersion: '1.7.0-license-activation',
+      appVersion: '1.7.1-oidc-diagnostic',
       userEmail: 'user@example.com',
       usage: { plan: 'business', label: 'Business', maxForms: 100, maxNotifications: 100, maxConditions: 50, allowsPayload: true, creditsTotal: null, creditsUsed: 0, creditsLeft: null },
+      planSyncWarning: null,
+      identityDiagnostics: null,
       notifications: previewNotifications,
       formCount: 3,
       currentFormId: 'form-1',

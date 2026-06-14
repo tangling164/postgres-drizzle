@@ -30,11 +30,13 @@ function getSidebarBootstrap() {
   var migrationWarning = NotificationService.migrateCurrentFormLegacy();
   var usage;
   var planSyncWarning = null;
+  var identityDiagnostics = null;
   try {
     usage = LicenseService.refreshUsage();
   } catch (error) {
     usage = LicenseService.getUsage();
     planSyncWarning = error.message;
+    identityDiagnostics = BackendService.getIdentityDiagnostics();
   }
   var notifications = NotificationService.getPage('', 1, 3);
   var email = Session.getActiveUser().getEmail();
@@ -43,6 +45,7 @@ function getSidebarBootstrap() {
     userEmail: email || 'Current Google account',
     usage: usage,
     planSyncWarning: planSyncWarning,
+    identityDiagnostics: identityDiagnostics,
     notifications: notifications.items,
     formCount: NotificationService.getAllRaw().length,
     currentFormId: FieldService.getFormId(),

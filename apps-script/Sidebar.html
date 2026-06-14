@@ -292,8 +292,12 @@
       var setup = data.currentFormConnected && data.triggerStatus.state === 'needs_setup'
         ? '<section class="section"><div class="row"><div><h2>Setup needs attention</h2><div class="meta">FormAlert could not finish setup.</div></div><button class="button button-danger button-small" onclick="fixSetup()">Fix setup</button></div></section>'
         : '';
+      var identityDiagnostics = data.identityDiagnostics
+        ? '<div class="meta">Authorization: ' + escapeHtml(data.identityDiagnostics.authorizationStatus || 'unknown') +
+          '<br>Identity audience: ' + escapeHtml(data.identityDiagnostics.identityAudience || 'unavailable') + '</div>'
+        : '';
       var planWarning = data.planSyncWarning
-        ? '<section class="section"><div class="meta">Plan status could not be refreshed. Your last known plan is shown.</div></section>'
+        ? '<section class="section stack"><div><h2>Plan sync needs attention</h2><div class="meta">' + escapeHtml(data.planSyncWarning) + '</div></div>' + identityDiagnostics + '</section>'
         : '';
 
       document.getElementById('main').innerHTML =
@@ -318,7 +322,7 @@
             '<a href="https://api.slack.com/messaging/webhooks" target="_blank">How to get a Slack Webhook</a>' +
             '<a href="https://app.slack.com/block-kit-builder/T0B9SHVRGG0/templates" target="_blank">How to use Payload Mode</a>' +
             '<button onclick="openDebug()">View plugin error logs</button>' +
-          '</div></section>' +
+          '</div><div class="meta">Build ' + escapeHtml(data.appVersion) + '</div></section>' +
         '</div>';
     }
 
