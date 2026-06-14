@@ -3,7 +3,7 @@ export interface BlogPost {
   title: string
   description: string
   publishedAt: string
-  paragraphs: string[]
+  paragraphs: readonly string[]
 }
 
 export const blogPosts: readonly BlogPost[] = [
@@ -31,7 +31,7 @@ export const blogPosts: readonly BlogPost[] = [
       'For step-by-step screenshots and troubleshooting, use the Installation Guide.',
     ],
   },
-] as const
+]
 
 export function getBlogPost(slug: string): BlogPost | undefined {
   return blogPosts.find((post) => post.slug === slug)
