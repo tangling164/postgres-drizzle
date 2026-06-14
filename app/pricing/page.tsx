@@ -13,10 +13,8 @@ export const metadata: Metadata = {
 export default function PricingPage() {
   return (
     <main>
-      <div className="page-container pricing-page-intro">
-        <BreadcrumbJsonLd items={[{ name: 'Home', path: '/' }, { name: 'Pricing', path: '/pricing' }]} />
-      </div>
-      <PricingSection />
+      <BreadcrumbJsonLd items={[{ name: 'Home', path: '/' }, { name: 'Pricing', path: '/pricing' }]} />
+      <PricingSection compact />
       <div className="page-container">
         <section className="content-section license-section">
           <SectionHeading eyebrow="No web account required" title="Purchase on the web. Activate in the add-on." />

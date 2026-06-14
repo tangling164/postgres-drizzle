@@ -1,4 +1,4 @@
-import { ArrowRight, Bell, List, ShieldCheck } from '@phosphor-icons/react/dist/ssr'
+import { Bell, List, ShieldCheck } from '@phosphor-icons/react/dist/ssr'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { footerGroups, primaryNav, siteConfig } from './config'
@@ -41,7 +41,6 @@ export function MarketingHeader() {
           <div>{primaryNav.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}</div>
         </details>
       </nav>
-      <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert App <ArrowRight /></ButtonLink>
     </header>
   )
 }

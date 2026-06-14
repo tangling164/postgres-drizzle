@@ -24,7 +24,7 @@ const plans: readonly PricingPlan[] = [
     yearly: '$0',
     payment: 'No payment required',
     description: 'Try direct Slack delivery from your current Google Form.',
-    features: ['7-day trial', '30 Slack sends total', '1 connected Google Form', 'Message Mode', 'No Filter Rules', 'Latest 10 redacted debug entries'],
+    features: ['7-day trial', '30 Slack sends total', '1 connected Google Form', 'Message Mode', 'No Filter Rules'],
   },
   {
     name: 'Standard',
@@ -32,7 +32,7 @@ const plans: readonly PricingPlan[] = [
     yearly: '$3.25',
     payment: '$39 billed yearly',
     description: 'For small teams filtering several Google Forms.',
-    features: ['No FormAlert send limit*', 'Up to 20 connected Google Forms', 'Message & Payload Mode', 'Filter Rules', 'Up to 50 conditions per Form', 'Latest 10 redacted debug entries'],
+    features: ['No FormAlert send limit*', 'Up to 20 connected Google Forms', 'Message & Payload Mode', 'Filter Rules'],
     featured: true,
   },
   {
@@ -100,9 +100,9 @@ export function PricingTable() {
   )
 }
 
-export function PricingSection() {
+export function PricingSection({ compact = false }: { compact?: boolean }) {
   return (
-    <section className="content-section pricing-section" aria-labelledby="pricing-title">
+    <section className={`content-section pricing-section ${compact ? 'pricing-section-compact' : ''}`} aria-labelledby="pricing-title">
       <PricingTable />
     </section>
   )

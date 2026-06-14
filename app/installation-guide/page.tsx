@@ -26,7 +26,7 @@ export default function InstallationGuidePage() {
   return (
     <main className="page-container docs-page">
       <BreadcrumbJsonLd items={[{ name: 'Home', path: '/' }, { name: 'Installation Guide', path: '/installation-guide' }]} />
-      <PageHero eyebrow="Installation guide" title="From Google Form to filtered Slack alert." description="Follow this guide inside the Google Forms editor. Most users can configure their first rule in a few focused steps.">
+      <PageHero eyebrow="Installation guide" title="From Google Form to filtered Slack alert." description="Follow this guide inside the Google Forms editor. Most users can configure their first rule in a few focused steps." align="center">
         <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert App</ButtonLink>
       </PageHero>
       <div className="docs-layout">

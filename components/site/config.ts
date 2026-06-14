@@ -28,6 +28,7 @@ export const siteConfig = {
 export const primaryNav = [
   { href: '/installation-guide', label: 'Setup guide' },
   { href: '/pricing', label: 'Pricing' },
+  { href: '/blog', label: 'Blog' },
   { href: '/faq', label: 'FAQ' },
 ]
 
@@ -44,6 +45,7 @@ export const footerGroups = [
     title: 'Help',
     links: [
       { href: '/faq', label: 'FAQ' },
+      { href: '/blog', label: 'Blog' },
       { href: '/support', label: 'Support' },
       { href: '/guides/google-forms-to-slack', label: 'Google Forms to Slack guide' },
     ],

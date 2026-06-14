@@ -60,17 +60,13 @@ p {
   border-bottom: 1px solid var(--line-warm);
   background: rgba(246, 247, 250, 0.92);
   backdrop-filter: blur(14px);
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 24px;
   position: sticky;
   top: 0;
   z-index: 20;
-}
-
-.marketing-header > a:first-child {
-  justify-self: start;
 }
 
 .marketing-header nav {
@@ -107,10 +103,6 @@ p {
 .marketing-header nav > a:hover::after,
 .marketing-header nav > a:focus-visible::after {
   transform: scaleX(1);
-}
-
-.marketing-header > .button {
-  justify-self: end;
 }
 
 .mobile-menu {
@@ -438,9 +430,8 @@ p {
   border-top: 1px solid var(--line-warm);
 }
 
-.pricing-page-intro {
-  padding-bottom: 0;
-  padding-top: 28px;
+.pricing-section-compact {
+  padding-top: 48px;
 }
 
 .final-cta {
@@ -1019,6 +1010,82 @@ p {
   font-size: 13px;
 }
 
+.blog-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--line-warm);
+}
+
+.blog-card {
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line-warm);
+}
+
+.blog-card time {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.blog-card h2 {
+  font-size: clamp(22px, 3vw, 28px);
+  line-height: 1.2;
+  margin: 0 0 10px;
+}
+
+.blog-card h2 a:hover {
+  color: var(--violet);
+}
+
+.blog-card > p {
+  margin: 0 0 14px;
+  max-width: 680px;
+}
+
+.blog-card-link {
+  color: var(--violet);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.blog-article-header {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 40px 0 0;
+  text-align: center;
+}
+
+.blog-article-header time {
+  display: block;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.blog-article-header h1 {
+  color: var(--ink);
+  font-size: clamp(34px, 4.5vw, 48px);
+  line-height: 1.12;
+  margin: 0 0 16px;
+}
+
+.blog-article-header > p {
+  margin: 0 auto;
+  max-width: 640px;
+  font-size: 17px;
+}
+
+.blog-article-content {
+  border-top: 0;
+  padding-top: 28px;
+}
+
 .license-code {
   max-width: 600px;
   margin: 28px auto;
@@ -1234,12 +1301,7 @@ p {
 }
 
 @media (max-width: 960px) {
-  .marketing-header {
-    grid-template-columns: 1fr auto;
-  }
-
-  .marketing-header nav > a,
-  .marketing-header > .button {
+  .marketing-header nav > a {
     display: none;
   }
 
