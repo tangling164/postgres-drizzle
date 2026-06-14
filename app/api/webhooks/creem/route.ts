@@ -7,10 +7,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import {
   CreemPayloadError,
+  creemEventIdentity,
   normalizeCreemEvent,
   verifyCreemSignature,
 } from '@/lib/backend/creem'
 import { handleCreemEvent } from '@/lib/backend/creem-handlers'
+import {
+  claimWebhookEvent,
+  completeWebhookEvent,
+  failWebhookEvent,
+} from '@/lib/backend/webhook-events'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -36,9 +42,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 })
   }
 
+  const identity = creemEventIdentity(body, rawBody)
+  let claimAttempt: number | null = null
   try {
+    const claim = await claimWebhookEvent({
+      provider: 'creem',
+      eventId: identity.eventId,
+      eventType: identity.eventType,
+      payloadSha256: identity.payloadSha256,
+    })
+    if (!claim.claimed) {
+      if (claim.status === 'processing') {
+        return NextResponse.json(
+          { received: false, retry: true, error: 'event_processing' },
+          { status: 503, headers: { 'Retry-After': '30' } }
+        )
+      }
+      return NextResponse.json({ received: true, duplicate: true })
+    }
+    claimAttempt = claim.attemptCount
     const event = normalizeCreemEvent(body)
     const result = await handleCreemEvent(event)
+    await completeWebhookEvent('creem', identity.eventId, claimAttempt)
     const detail =
       event.kind === 'ignored'
         ? event.type
@@ -48,6 +73,11 @@ export async function POST(request: NextRequest) {
     console.log(`[creem-webhook] ${event.kind} (${detail}): ${result.note}`)
     return NextResponse.json({ received: true })
   } catch (error) {
+    if (claimAttempt !== null) {
+      await failWebhookEvent('creem', identity.eventId, claimAttempt).catch((markError) => {
+        console.error('[creem-webhook] failed to mark event failed:', markError)
+      })
+    }
     if (error instanceof CreemPayloadError) {
       console.error(`[creem-webhook] payload error: ${error.message}`)
       return NextResponse.json({ error: 'payload_error', message: error.message }, { status: 500 })

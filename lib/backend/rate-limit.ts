@@ -21,6 +21,8 @@ export const RATE_LIMIT_RULES = {
   activateFailures: { scope: 'activate-fail', limit: 5, windowSeconds: 15 * 60 },
   /** §8.3: GET /api/license/check — 10/min per IP */
   licenseCheck: { scope: 'license-check', limit: 10, windowSeconds: 60 },
+  /** M1.5: prevent repeated Test sends from becoming an unlimited relay. */
+  testSend: { scope: 'test-send', limit: 10, windowSeconds: 10 * 60 },
 } as const satisfies Record<string, RateLimitRule>
 
 const CLEANUP_PROBABILITY = 0.02

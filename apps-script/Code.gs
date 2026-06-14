@@ -76,8 +76,8 @@ function getEditorData(notificationId) {
       enabled: true,
       webhookUrl: '',
       messageType: 'message',
-      messageTemplate: 'New filtered form response\n\n' + (fields[0] ? fields[0].fieldTitle + ': {{' + fields[0].fieldTitle + '}}' : ''),
-      payloadTemplate: '{\n  "text": "New filtered response",\n  "blocks": []\n}',
+      messageTemplate: 'New form response\n\n' + (fields[0] ? fields[0].fieldTitle + ': {{' + fields[0].fieldTitle + '}}' : ''),
+      payloadTemplate: '{\n  "text": "New form response",\n  "blocks": []\n}',
       filter: {
         match: 'all',
         conditions: []
@@ -108,13 +108,15 @@ function validatePayloadApi(payloadTemplate) {
 }
 
 function sendTestApi(notification) {
-  var normalized = prepareTestNotification_(notification, false);
+  LicenseService.authorizeTest();
+  var normalized = prepareTestNotification_(notification, true);
   var template = normalized.messageType === 'payload' ? normalized.payloadTemplate : normalized.messageTemplate;
   var responseMap = MessageRenderer.extractVariables(template).length ? FieldService.getLatestResponse() : {};
   return ExecutionService.run(normalized, responseMap, { isTest: true, skipFilter: true });
 }
 
 function testLatestResponseApi(notification) {
+  LicenseService.authorizeTest();
   var normalized = prepareTestNotification_(notification, true);
   return ExecutionService.run(normalized, FieldService.getLatestResponse(), { isTest: true });
 }
@@ -144,6 +146,9 @@ function activateLicenseApi(licenseCode) {
 }
 
 function copyDebugInfoApi() {
+  try {
+    LicenseService.refreshUsage();
+  } catch (error) {}
   return JSON.stringify(DebugService.getDebugInfo(), null, 2);
 }
 

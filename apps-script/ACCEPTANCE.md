@@ -23,7 +23,9 @@ This document separates locally verified behavior from checks that require a rea
 | Trigger setup recovery | `needs_setup`, Fix setup, Form source ID detection, duplicate cleanup, and redacted failure logging tests | Verified |
 | Form submit pipeline | Simulated Forms `e.response` event covers `onFormSubmit()` execution | Locally verified; real Google event requires manual check |
 | Last status and Copy debug info | Latest 10 logs use a strict metadata whitelist; no response, Webhook, payload, email, or notification name | Verified |
-| License activation and limits | OIDC-authenticated entitlement API activation; Free 1, Standard 20, Business 100 connected Forms; paid plans allow up to the 50-condition safety limit | Verified |
+| License activation and limits | OIDC-authenticated official License Code activation; Free has no Filter Rules and 1 connected Form; Standard has 20 connected Forms and up to 50 conditions per Form | Verified |
+| Account-level Free quota | Real sends reserve the one-time 7-day / 30-send account quota through the entitlement API; Tests are rate limited and stop after trial expiry | Verified |
+| Deterministic downgrade | Oldest connected Forms remain entitled; other Forms and unsupported paid features show `Paused by plan limit` without deleting settings | Verified |
 | No prohibited integrations | Manifest/source tests reject Sheets, Drive, Gmail, AI, and endpoints other than Slack plus the FormAlert entitlement API | Verified |
 
 Run the automated checks with:
@@ -53,9 +55,11 @@ Budget = 100, Message = General question, Priority = Low
 
 - [ ] Reload the Form editor and open FormAlert from the top-right add-on button.
 - [ ] Confirm the Sidebar shows the current Google account, plan, connected Form count, and no full log list.
-- [ ] Activate a Creem Test-mode License Code and confirm the Sidebar refreshes to the purchased Standard or Business plan.
+- [ ] Activate an official emailed Standard License Code and confirm the Sidebar shows the matching full label, such as `Standard / Monthly` or `Standard / Yearly`.
 - [ ] Re-enter the same License Code on the same account and confirm activation remains successful without creating another active license.
 - [ ] Try the activated License Code on another Google account and confirm the add-on reports that the code is already used.
+- [ ] On Free, confirm Filter Rules cannot be created, saved, or tested, and real sends across different Forms share one account-level 30-send quota.
+- [ ] After Free trial expiry or exhaustion, confirm both real sends and Test sends are rejected.
 - [ ] Open another configured Form and confirm the same account-level Connected Forms list appears.
 - [ ] Click Refresh Fields and confirm all current Form questions appear.
 - [ ] Insert `{{Budget}}` into Message Mode at the current cursor position.
@@ -69,6 +73,7 @@ Budget = 100, Message = General question, Priority = Low
 - [ ] Remove trigger authorization or force setup failure; confirm `Automatic alerts need setup` and `Fix setup`.
 - [ ] Copy debug info and confirm it contains no Webhook URL, Form response values, email, full message, or full payload.
 - [ ] Confirm the same Google account that configured the notification owns the installable trigger.
+- [ ] Downgrade from Standard and confirm out-of-plan Forms or paid features show `Paused by plan limit`; reactivate Standard and confirm the saved settings become eligible again.
 
 ## Privacy Boundary
 

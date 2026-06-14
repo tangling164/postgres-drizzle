@@ -1,3 +1,17 @@
+function publicCreemCheckoutUrl(value: string | undefined): string | null {
+  if (!value) return null
+  try {
+    const url = new URL(value)
+    const isCreem = url.hostname === 'creem.io' || url.hostname.endsWith('.creem.io')
+    const isTest = url.hostname.startsWith('test.') || url.pathname.includes('/test/')
+    return url.protocol === 'https:' && isCreem && !isTest
+      ? value
+      : null
+  } catch {
+    return null
+  }
+}
+
 export const siteConfig = {
   name: 'FormAlert for Slack',
   shortName: 'FormAlert',
@@ -5,10 +19,8 @@ export const siteConfig = {
   url: process.env.NEXT_PUBLIC_SITE_URL ?? 'https://formalert.app',
   marketplaceUrl: process.env.NEXT_PUBLIC_MARKETPLACE_URL ?? '/installation-guide',
   checkout: {
-    standardMonthly: process.env.NEXT_PUBLIC_CREEM_STANDARD_MONTHLY_URL ?? '/checkout/success?plan=standard&cycle=monthly',
-    standardYearly: process.env.NEXT_PUBLIC_CREEM_STANDARD_YEARLY_URL ?? '/checkout/success?plan=standard&cycle=yearly',
-    businessMonthly: process.env.NEXT_PUBLIC_CREEM_BUSINESS_MONTHLY_URL ?? '/checkout/success?plan=business&cycle=monthly',
-    businessYearly: process.env.NEXT_PUBLIC_CREEM_BUSINESS_YEARLY_URL ?? '/checkout/success?plan=business&cycle=yearly',
+    standardMonthly: publicCreemCheckoutUrl(process.env.NEXT_PUBLIC_CREEM_STANDARD_MONTHLY_URL),
+    standardYearly: publicCreemCheckoutUrl(process.env.NEXT_PUBLIC_CREEM_STANDARD_YEARLY_URL),
   },
   supportEmail: process.env.NEXT_PUBLIC_SUPPORT_EMAIL ?? 'support@formalert.app',
 }

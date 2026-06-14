@@ -299,12 +299,17 @@
       var planWarning = data.planSyncWarning
         ? '<section class="section stack"><div><h2>Plan sync needs attention</h2><div class="meta">' + escapeHtml(data.planSyncWarning) + '</div></div>' + identityDiagnostics + '</section>'
         : '';
+      var trialUsage = usage.creditsTotal !== null
+        ? '<div class="meta">Free sends: ' + usage.creditsUsed + ' / ' + usage.creditsTotal +
+          (usage.trialExpiresAt ? '<br>Trial ends: ' + escapeHtml(String(usage.trialExpiresAt).slice(0, 10)) : '') + '</div>'
+        : '';
 
       document.getElementById('main').innerHTML =
         '<div class="stack">' +
           '<section class="section">' +
             '<div class="meta">Logged in as</div><div class="value">' + escapeHtml(data.userEmail) + '</div>' +
             '<div class="plan-line"><span><span class="meta">Plan</span><br><strong>' + escapeHtml(usage.displayLabel || usage.label) + '</strong></span><span class="form-usage">' + data.formCount + ' / ' + usage.maxForms + ' Forms</span></div>' +
+            trialUsage +
           '</section>' +
           setup +
           planWarning +
@@ -327,6 +332,14 @@
     }
 
     function notificationHtml(notification) {
+      if (notification.planBlocked) {
+        return '<article class="notification">' +
+          '<h3>' + escapeHtml(notification.formTitle) + '</h3>' +
+          '<div class="meta">Paused by plan limit</div>' +
+          '<div class="notification-actions"><button class="button button-secondary button-small" onclick="editConnectedForm(\'' + escapeHtml(notification.id) + '\',\'' + escapeHtml(notification.formId) + '\',' + notification.isCurrentForm + ')">' + icon('edit') + 'Edit</button>' +
+          '<button class="button button-danger button-small" onclick="removeNotification(\'' + escapeHtml(notification.id) + '\')">' + icon('delete') + 'Delete</button>' +
+          '<button class="button button-secondary button-small" disabled>' + icon('resume') + 'Plan limit</button></div></article>';
+      }
       var action = notification.enabled ? 'Pause' : 'Resume';
       return '<article class="notification">' +
         '<h3>' + escapeHtml(notification.formTitle) + '</h3>' +

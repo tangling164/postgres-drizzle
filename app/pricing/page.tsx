@@ -6,7 +6,7 @@ import { BreadcrumbJsonLd } from '@/components/site/seo'
 
 export const metadata: Metadata = {
   title: 'Pricing',
-  description: 'Compare Free, Standard, and Business plans for FormAlert for Slack. Monthly and yearly billing available.',
+  description: 'Compare Free and Standard plans for FormAlert for Slack. Standard monthly and yearly billing is available.',
   alternates: { canonical: '/pricing' },
 }
 
@@ -15,7 +15,7 @@ export default function PricingPage() {
     <main>
       <div className="page-container pricing-page-intro">
         <BreadcrumbJsonLd items={[{ name: 'Home', path: '/' }, { name: 'Pricing', path: '/pricing' }]} />
-        <PageHero eyebrow="Pricing" title="Simple pricing for filtered Form alerts." description="Compare Free, Standard, and Business plans, then choose the limits that fit your workflows." align="center" />
+        <PageHero eyebrow="Pricing" title="Simple pricing for filtered Form alerts." description="Start with direct Slack delivery, then upgrade to Standard for Filter Rules and more connected Forms." align="center" />
       </div>
       <PricingSection />
       <div className="page-container">

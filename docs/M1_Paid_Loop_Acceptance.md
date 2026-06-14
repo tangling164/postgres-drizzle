@@ -1,5 +1,9 @@
 # M1 Paid Loop Automated Acceptance
 
+> Historical M1 Test-mode evidence only. Do not use this flow for M1.5 launch
+> approval. Business fulfillment is disabled while Business is `Coming soon`;
+> use `docs/M1_5_Standard_Launch_Acceptance.md` for the Standard Live gate.
+
 This acceptance flow proves that a real Creem Test-mode purchase produces an
 email-only formal License Code that activates the matching paid plan through a
 real Apps Script Google OIDC identity.

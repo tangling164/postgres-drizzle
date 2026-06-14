@@ -61,18 +61,36 @@ async function handlePaid(
   if (await isTombstonedSubscription(event.subscriptionId)) {
     return { note: 'tombstoned subscription; event swallowed' }
   }
+  if (event.plan === 'business' && process.env.ENABLE_BUSINESS_SALES !== 'true') {
+    throw new Error('Business sales are not enabled')
+  }
 
-  // Renewal detection: an existing license on the same subscription means
-  // this paid event extends the period instead of creating a new license.
-  // checkout.completed always mints; subscription.paid only mints when no
-  // license row exists yet (fallback if checkout handler failed earlier).
-  if (event.subscriptionId && event.sourceType === 'subscription.paid') {
+  // An existing order must stay on the retry path below so a failed initial
+  // License email can be rotated and resent. Otherwise, any existing license
+  // on the subscription means this out-of-order paid event is a renewal and
+  // must never mint a second License Code.
+  if (event.subscriptionId) {
+    const existingOrders = await sql`
+      SELECT 1 FROM orders WHERE creem_order_id = ${event.orderId} LIMIT 1
+    `
     const existingLicenses = await sql`
-      SELECT id FROM licenses
+      SELECT id, order_id FROM licenses
       WHERE creem_subscription_id = ${event.subscriptionId}
+      ORDER BY created_at DESC
       LIMIT 1
     `
-    if (existingLicenses.length > 0) {
+    if (existingOrders.length === 0 && existingLicenses.length > 0) {
+      const aliases = await sql`
+        INSERT INTO creem_order_aliases (creem_order_id, order_id)
+        VALUES (${event.orderId}, ${existingLicenses[0].order_id})
+        ON CONFLICT (creem_order_id) DO UPDATE
+        SET creem_order_id = EXCLUDED.creem_order_id
+        WHERE creem_order_aliases.order_id = EXCLUDED.order_id
+        RETURNING order_id
+      `
+      if (aliases.length === 0) {
+        throw new Error('Creem order id is already mapped to another order')
+      }
       return handleRenewal(event)
     }
   }
@@ -179,15 +197,21 @@ async function handleRenewal(
     // Review v5 P1-02: a superseded/revoked license keeps its own period
     // bookkeeping but must never overwrite the account's current (higher)
     // entitlement. Only an `active` license propagates to the account.
-    await tx`
-      UPDATE licenses SET valid_until = ${newValidUntil}
+    const updatedLicenses = await tx`
+      UPDATE licenses
+      SET valid_until = GREATEST(COALESCE(valid_until, ${newValidUntil}), ${newValidUntil})
       WHERE id = ${license.id}
+      RETURNING valid_until
     `
+    const effectiveValidUntil = updatedLicenses[0].valid_until as Date
 
     if (license.status === 'active' && license.activated_account_id) {
       await tx`
         UPDATE accounts
-        SET plan_expires_at = ${newValidUntil},
+        SET plan_expires_at = GREATEST(
+              COALESCE(plan_expires_at, ${effectiveValidUntil}),
+              ${effectiveValidUntil}
+            ),
             entitlement_status = 'active',
             updated_at = now()
         WHERE id = ${license.activated_account_id} AND plan = ${license.plan}
@@ -212,6 +236,7 @@ async function handleCancelled(
     SET cancel_at_period_end = true, cancelled_at = now()
     WHERE creem_subscription_id = ${event.subscriptionId}
       AND status IN ('pending', 'active')
+      AND cancel_at_period_end = false
     RETURNING id, plan, valid_until, order_id
   `
   if (rows.length === 0) {
@@ -278,8 +303,12 @@ async function handleRefundOrDispute(
   const sql = getSql({ transaction: true })
   const result = await sql.begin(async (tx) => {
     const orders = await tx`
-      SELECT id, buyer_email, plan FROM orders
-      WHERE creem_order_id = ${event.orderId}
+      SELECT DISTINCT o.id, o.buyer_email, o.plan, o.status
+      FROM orders o
+      LEFT JOIN creem_order_aliases a ON a.order_id = o.id
+      WHERE o.creem_order_id = ${event.orderId}
+         OR a.creem_order_id = ${event.orderId}
+      LIMIT 1
     `
     if (orders.length === 0) {
       return { found: false as const, buyerEmail: null, plan: null }
@@ -313,6 +342,7 @@ async function handleRefundOrDispute(
 
     return {
       found: true as const,
+      changed: order.status !== event.disposition || licenses.length > 0,
       buyerEmail: order.buyer_email as string,
       plan: order.plan as string,
     }
@@ -320,6 +350,9 @@ async function handleRefundOrDispute(
 
   if (!result.found) {
     return { note: 'refund for unknown order; ignored' }
+  }
+  if (!result.changed) {
+    return { note: `${event.disposition} event already applied; ignored` }
   }
   if (result.buyerEmail && result.plan) {
     await sendDowngradeExecutedEmail({

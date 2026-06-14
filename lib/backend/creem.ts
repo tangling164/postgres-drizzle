@@ -4,7 +4,7 @@
  *
  * Payload shapes: https://docs.creem.io/code/webhooks
  */
-import { createHmac } from 'node:crypto'
+import { createHash, createHmac } from 'node:crypto'
 import {
   catalogDebugHint,
   findCatalogEntry,
@@ -29,6 +29,20 @@ export function verifyCreemSignature(
   if (!signatureHeader) return false
   const expected = computeCreemSignature(rawBody, secret)
   return timingSafeEqualHex(expected, signatureHeader.trim())
+}
+
+export function creemEventIdentity(
+  body: unknown,
+  rawBody: string
+): { eventId: string; eventType: string; payloadSha256: string } {
+  const root = body as Record<string, unknown>
+  const payloadSha256 = createHash('sha256').update(rawBody).digest('hex')
+  const providerId = root?.id ?? root?.event_id
+  return {
+    eventId: providerId ? String(providerId) : `sha256:${payloadSha256}`,
+    eventType: String(root?.eventType ?? root?.type ?? 'unknown').toLowerCase(),
+    payloadSha256,
+  }
 }
 
 export type CreemEvent =

@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "runtimeSnapshot": "temp/m15-standard-runtime.json",
+  "checkouts": {
+    "standardMonthly": {
+      "mode": "live",
+      "licenseEmailDelivered": false,
+      "officialLicenseCodeFormatVerified": false,
+      "activatedPlan": null,
+      "activatedBillingCycle": null,
+      "displayLabel": null
+    },
+    "standardYearly": {
+      "mode": "live",
+      "licenseEmailDelivered": false,
+      "officialLicenseCodeFormatVerified": false,
+      "activatedPlan": null,
+      "activatedBillingCycle": null,
+      "displayLabel": null
+    }
+  },
+  "freeFilter": {
+    "createBlocked": false,
+    "saveBlocked": false,
+    "testBlocked": false
+  },
+  "downgrade": {
+    "pausedByPlanLimitVisible": false,
+    "settingsRetained": false,
+    "upgradeRestored": false
+  },
+  "soak": {
+    "startedAt": null,
+    "endedAt": null,
+    "formsTested": 0,
+    "expectedMatchingSends": 0,
+    "receivedMatchingSends": 0,
+    "missingSends": 0,
+    "duplicateSends": 0,
+    "unexpectedNonMatchingSends": 0
+  }
+}

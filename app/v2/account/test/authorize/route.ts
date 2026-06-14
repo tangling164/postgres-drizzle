@@ -1,21 +1,14 @@
-/**
- * GET /v2/account/plan (Full_Backend_Spec v4.1 §7.2).
- *
- * Returns the resolved entitlement for the calling Google account. This is
- * the read endpoint the add-on uses to render plan state; the effective plan
- * comes from resolveEntitlement (§6.3), never from accounts.plan alone.
- * Bootstrap: first call creates the account + free trial (§2.3).
- */
 import { NextRequest, NextResponse } from 'next/server'
 import { ensureAccount } from '@/lib/backend/accounts'
 import { resolveEntitlement } from '@/lib/backend/entitlement'
 import { OidcError, verifyIdentityToken } from '@/lib/backend/google-oidc'
 import { planResponse } from '@/lib/backend/plan-response'
+import { hitRateLimit, RATE_LIMIT_RULES } from '@/lib/backend/rate-limit'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   let identity
   try {
     identity = await verifyIdentityToken(request.headers.get('authorization'))
@@ -26,15 +19,22 @@ export async function GET(request: NextRequest) {
     throw error
   }
 
+  const { allowed } = await hitRateLimit(RATE_LIMIT_RULES.testSend, identity.sub)
+  if (!allowed) {
+    return NextResponse.json({ error: 'test_rate_limited' }, { status: 429 })
+  }
+
   const account = await ensureAccount(identity.sub, identity.email)
   const entitlement = await resolveEntitlement(account.id)
   if (!entitlement) {
     return NextResponse.json({ error: 'account_not_found' }, { status: 404 })
   }
+  if (entitlement.effectivePlan === 'none') {
+    return NextResponse.json({ error: entitlement.reason }, { status: 403 })
+  }
 
   return NextResponse.json({
+    test_allowed: true,
     ...planResponse(entitlement),
-    // Reserved for a future server-managed Form count.
-    enabled_forms: 0,
   })
 }

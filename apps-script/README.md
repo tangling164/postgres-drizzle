@@ -9,7 +9,7 @@ This directory contains the Google Forms Editor Add-on MVP. It is intentionally 
 - Keeps current-Form status and the latest 10 metadata-only debug logs in document properties.
 - Evaluates filters and renders templates in Apps Script.
 - Sends matching notifications directly from Apps Script to the configured Slack Incoming Webhook.
-- Calls the FormAlert entitlement API only for Google-account identity, License Code activation, and plan refresh. Form responses, Slack Webhooks, templates, and rendered payloads never leave Apps Script.
+- Calls the FormAlert entitlement API only for Google-account identity, License Code activation, plan refresh, account-level Free send reservation, and Test authorization. Form responses, Slack Webhooks, templates, and rendered payloads never leave Apps Script.
 
 ## Files
 
@@ -25,7 +25,7 @@ SlackService.gs          Direct Incoming Webhook delivery
 DebugService.gs          Redacted last status and latest 10 local logs
 TriggerService.gs        Idempotent Form submit trigger setup
 LicenseService.gs        Cached entitlement state and local feature enforcement
-BackendService.gs        OIDC-authenticated License activation and plan refresh API client
+BackendService.gs        OIDC-authenticated entitlement, Free quota, and Test authorization API client
 ExecutionService.gs      Filter, render, send, and status pipeline
 Sidebar.html             Main, All Notifications, Create/Edit UI
 appsscript.json          Least-privilege Forms manifest
@@ -80,7 +80,7 @@ The following behaviors require a real Google Form, Apps Script authorization, a
 
 1. Sidebar opens from the Google Forms editor add-on button.
 2. Refresh Fields reads questions from the current Form.
-3. Test with Latest Response sends matching Message and Payload notifications.
+3. On Standard, Test with Latest Response sends matching Message and Payload notifications.
 4. In an internal or published installation, a real Google Form submission invokes the installable `onFormSubmit` trigger.
 5. Matching responses send to Slack and nonmatching responses update status to skipped.
 6. Copy debug info writes only redacted local operational metadata to the clipboard.

@@ -10,7 +10,28 @@ var LicenseService = {
     var properties = ConfigService.userProperties();
     this.retireLegacyLocalLicense(properties);
     var plan = properties.getProperty(FormAlertConfig.KEYS.PLAN) || 'free';
+    if (plan === 'standard' || plan === 'business') {
+      var paidExpiry = properties.getProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT);
+      if (!paidExpiry || this.isPast(paidExpiry)) return this.getCachedFreePlan(properties);
+    }
+    if (plan === 'free' && properties.getProperty(FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT)) {
+      return this.getCachedFreePlan(properties);
+    }
     return this.PLAN_LIMITS[plan] || this.PLAN_LIMITS.free;
+  },
+
+  isPast: function (value) {
+    var timestamp = new Date(String(value || '')).getTime();
+    return !isFinite(timestamp) || timestamp < new Date().getTime();
+  },
+
+  getCachedFreePlan: function (properties) {
+    var expiresAt = properties.getProperty(FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT);
+    var limit = Number(properties.getProperty(FormAlertConfig.KEYS.FREE_SEND_LIMIT) || this.PLAN_LIMITS.free.credits);
+    var used = Number(properties.getProperty(FormAlertConfig.KEYS.FREE_SEND_USED) || 0);
+    return expiresAt && !this.isPast(expiresAt) && isFinite(limit) && isFinite(used) && used < limit
+      ? this.PLAN_LIMITS.free
+      : this.PLAN_LIMITS.none;
   },
 
   retireLegacyLocalLicense: function (properties) {
@@ -18,6 +39,10 @@ var LicenseService = {
     properties.deleteProperty(FormAlertConfig.KEYS.LICENSE_CODE);
     properties.deleteProperty(FormAlertConfig.KEYS.BILLING_CYCLE);
     properties.deleteProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT);
+    properties.deleteProperty(FormAlertConfig.KEYS.PLAN_SYNCED_AT);
+    properties.deleteProperty(FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT);
+    properties.deleteProperty(FormAlertConfig.KEYS.FREE_SEND_LIMIT);
+    properties.deleteProperty(FormAlertConfig.KEYS.FREE_SEND_USED);
     properties.setProperty(FormAlertConfig.KEYS.PLAN, 'free');
     return true;
   },
@@ -29,6 +54,10 @@ var LicenseService = {
 
   refreshUsage: function () {
     return this.applyRemotePlan(BackendService.getPlan());
+  },
+
+  authorizeTest: function () {
+    return this.applyRemotePlan(BackendService.authorizeTest());
   },
 
   applyRemotePlan: function (result) {
@@ -47,18 +76,38 @@ var LicenseService = {
     } else {
       properties.deleteProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT);
     }
+    this.applyFreeTrialSnapshot(result && result.free_trial);
+    properties.setProperty(FormAlertConfig.KEYS.PLAN_SYNCED_AT, new Date().toISOString());
+    ConfigService.documentProperties().deleteProperty(FormAlertConfig.KEYS.FREE_CREDITS_USED);
     return this.getUsage();
   },
 
+  applyFreeTrialSnapshot: function (trial) {
+    var properties = ConfigService.userProperties();
+    if (!trial) {
+      properties.deleteProperty(FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT);
+      properties.deleteProperty(FormAlertConfig.KEYS.FREE_SEND_LIMIT);
+      properties.deleteProperty(FormAlertConfig.KEYS.FREE_SEND_USED);
+      return;
+    }
+    properties.setProperty(FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT, String(trial.expires_at || ''));
+    properties.setProperty(FormAlertConfig.KEYS.FREE_SEND_LIMIT, String(Number(trial.send_limit) || this.PLAN_LIMITS.free.credits));
+    properties.setProperty(FormAlertConfig.KEYS.FREE_SEND_USED, String(Math.max(0, Number(trial.send_used) || 0)));
+  },
+
   getUsedCredits: function () {
-    var used = Number(ConfigService.documentProperties().getProperty(FormAlertConfig.KEYS.FREE_CREDITS_USED) || 0);
+    var used = Number(ConfigService.userProperties().getProperty(FormAlertConfig.KEYS.FREE_SEND_USED) || 0);
     return isFinite(used) && used > 0 ? Math.floor(used) : 0;
   },
 
   getUsage: function () {
     var plan = this.getPlan();
     var used = this.getUsedCredits();
-    var billingCycle = ConfigService.userProperties().getProperty(FormAlertConfig.KEYS.BILLING_CYCLE);
+    var properties = ConfigService.userProperties();
+    var billingCycle = properties.getProperty(FormAlertConfig.KEYS.BILLING_CYCLE);
+    var trialExpiresAt = properties.getProperty(FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT);
+    var freeLimit = Number(properties.getProperty(FormAlertConfig.KEYS.FREE_SEND_LIMIT) || this.PLAN_LIMITS.free.credits);
+    if (!isFinite(freeLimit) || freeLimit < 0) freeLimit = this.PLAN_LIMITS.free.credits;
     var displayLabel = plan.label;
     if ((plan.plan === 'standard' || plan.plan === 'business') && (billingCycle === 'monthly' || billingCycle === 'yearly')) {
       displayLabel += ' / ' + billingCycle.charAt(0).toUpperCase() + billingCycle.slice(1);
@@ -72,10 +121,12 @@ var LicenseService = {
       maxNotifications: plan.maxNotifications,
       maxConditions: plan.maxConditions,
       allowsPayload: plan.allowsPayload,
-      validUntil: ConfigService.userProperties().getProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
-      creditsTotal: plan.credits,
+      validUntil: properties.getProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
+      planSyncedAt: properties.getProperty(FormAlertConfig.KEYS.PLAN_SYNCED_AT),
+      trialExpiresAt: trialExpiresAt,
+      creditsTotal: plan.credits === null || (plan.plan === 'none' && !trialExpiresAt) ? null : freeLimit,
       creditsUsed: plan.credits === null ? 0 : used,
-      creditsLeft: plan.credits === null ? null : Math.max(0, plan.credits - used)
+      creditsLeft: plan.credits === null ? null : plan.plan === 'none' ? 0 : Math.max(0, freeLimit - used)
     };
   },
 
@@ -109,34 +160,32 @@ var LicenseService = {
 
   assertCanSend: function () {
     var usage = this.getUsage();
+    if (usage.plan === 'none') {
+      if (usage.creditsTotal !== null && usage.creditsUsed >= usage.creditsTotal) {
+        throw new Error('Free limit reached. Upgrade to continue sending alerts.');
+      }
+      throw new Error('Your Free trial has ended. Upgrade to continue sending alerts.');
+    }
     if (usage.creditsLeft !== null && usage.creditsLeft <= 0) {
       throw new Error('Free limit reached. Upgrade to continue sending alerts.');
     }
   },
 
   reserveSendCredit: function () {
-    var plan = this.getPlan().plan;
-    if (plan === 'none') {
-      throw new Error('Your Free trial has ended. Upgrade to continue sending alerts.');
-    }
-    if (plan !== 'free') return false;
-    return ConfigService.withDocumentLock(function () {
-      var properties = ConfigService.documentProperties();
-      var used = LicenseService.getUsedCredits();
-      if (used >= LicenseService.PLAN_LIMITS.free.credits) {
-        throw new Error('Free limit reached. Upgrade to continue sending alerts.');
-      }
-      properties.setProperty(FormAlertConfig.KEYS.FREE_CREDITS_USED, String(used + 1));
-      return true;
-    });
+    var result = BackendService.reserveSend();
+    if (!result || result.reserved !== true) return false;
+    this.applyFreeTrialSnapshot(result.free_trial);
+    return result.reservation_id;
   },
 
-  releaseSendCredit: function () {
-    return ConfigService.withDocumentLock(function () {
-      var properties = ConfigService.documentProperties();
-      var used = LicenseService.getUsedCredits();
-      properties.setProperty(FormAlertConfig.KEYS.FREE_CREDITS_USED, String(Math.max(0, used - 1)));
-    });
+  releaseSendCredit: function (reservationId) {
+    if (!reservationId) return false;
+    var result = BackendService.releaseSend(reservationId);
+    if (result && result.released === true && result.send_used !== null) {
+      ConfigService.userProperties().setProperty(FormAlertConfig.KEYS.FREE_SEND_USED, String(result.send_used));
+      return true;
+    }
+    return false;
   },
 
   recordSend: function () {

@@ -41,6 +41,40 @@ var TriggerService = {
     return { ok: true, removed: removed };
   },
 
+  getReadinessSummary: function () {
+    var triggerCounts = {};
+    var orphanTriggers = 0;
+    ScriptApp.getProjectTriggers().forEach(function (trigger) {
+      if (trigger.getHandlerFunction() !== 'onFormSubmit') return;
+      if (typeof trigger.getEventType === 'function' && ScriptApp.EventType && trigger.getEventType() !== ScriptApp.EventType.ON_FORM_SUBMIT) return;
+      var formId = typeof trigger.getTriggerSourceId === 'function' ? trigger.getTriggerSourceId() : null;
+      if (!formId || !NotificationService.getByFormId(formId)) {
+        orphanTriggers += 1;
+        return;
+      }
+      triggerCounts[formId] = (triggerCounts[formId] || 0) + 1;
+    });
+    var duplicateTriggers = Object.keys(triggerCounts).reduce(function (total, formId) {
+      return total + Math.max(0, triggerCounts[formId] - 1);
+    }, 0);
+    var notifications = NotificationService.getAllRaw();
+    var enabledForms = notifications.filter(function (notification) {
+      return notification.enabled !== false;
+    }).length;
+    var planBlockedForms = notifications.filter(function (notification) {
+      return Boolean(NotificationService.getPlanBlockReason(notification));
+    }).length;
+    return {
+      configuredForms: notifications.length,
+      enabledForms: enabledForms,
+      entitledForms: NotificationService.getEntitled().length,
+      planBlockedForms: planBlockedForms,
+      activeTriggerForms: Object.keys(triggerCounts).length,
+      duplicateTriggers: duplicateTriggers,
+      orphanTriggers: orphanTriggers
+    };
+  },
+
   ensureFormSubmitTrigger: function () {
     try {
       this.cleanupOrphanedAndDuplicateTriggers();

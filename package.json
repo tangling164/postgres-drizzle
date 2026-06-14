@@ -11,6 +11,10 @@
     "lint": "eslint \"app/**/*.{ts,tsx}\" \"components/**/*.{ts,tsx}\" \"lib/**/*.{ts,tsx}\"",
     "migrate": "node scripts/migrate.mjs",
     "test:m1": "node scripts/m1-acceptance.mjs",
+    "test:m15": "node scripts/m15-standard-acceptance.mjs",
+    "test:production-readiness": "node scripts/m15-standard-acceptance.mjs verify-production-database",
+    "m15:retire-business-test-licenses": "node scripts/m15-retire-business-test-licenses.mjs",
+    "test:db-integration": "node tests/backend/run-db-integration.mjs",
     "test:plugin": "node apps-script/tests/run-tests.js",
     "test:backend": "node tests/backend/run-tests.mjs"
   },

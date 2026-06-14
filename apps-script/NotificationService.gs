@@ -58,11 +58,20 @@ var NotificationService = {
 
   readFormConfig: function (formId) {
     if (!formId) return null;
-    var notification = ConfigService.readJson(ConfigService.userProperties(), this.configKey(formId), null);
-    return notification && notification.formId === formId ? notification : null;
+    var properties = ConfigService.userProperties();
+    var notification = ConfigService.readJson(properties, this.configKey(formId), null);
+    if (!notification || notification.formId !== formId) return null;
+    if (!notification.createdAt) {
+      notification.createdAt = notification.updatedAt || new Date().toISOString();
+      try {
+        ConfigService.writeJson(properties, this.configKey(formId), notification);
+      } catch (error) {}
+    }
+    return notification;
   },
 
   writeFormConfig: function (notification) {
+    notification.createdAt = notification.createdAt || notification.updatedAt || new Date().toISOString();
     ConfigService.writeJson(ConfigService.userProperties(), this.configKey(notification.formId), notification);
     var index = this.getIndex().filter(function (entry) { return entry.formId !== notification.formId; });
     index.push(this.toIndexItem(notification));
@@ -96,6 +105,7 @@ var NotificationService = {
       latest.formTitle = FieldService.getFormTitle();
       latest.name = latest.formTitle;
       latest.updatedAt = latest.updatedAt || new Date().toISOString();
+      latest.createdAt = latest.createdAt || latest.updatedAt;
       NotificationService.writeFormConfig(latest);
       documentProperties.setProperty(FormAlertConfig.KEYS.LEGACY_MIGRATED, 'true');
       return legacy.length > 1
@@ -118,12 +128,24 @@ var NotificationService = {
     var limit = LicenseService.getPlan().maxForms;
     return this.getAllRaw()
       .slice()
-      .sort(function (a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)); })
+      .sort(function (a, b) {
+        var createdOrder = String(a.createdAt || a.updatedAt || '').localeCompare(String(b.createdAt || b.updatedAt || ''));
+        return createdOrder || String(a.formId || '').localeCompare(String(b.formId || ''));
+      })
       .slice(0, limit);
   },
 
   isEntitled: function (id) {
     return this.getEntitled().some(function (notification) { return notification.id === id; });
+  },
+
+  getPlanBlockReason: function (notification) {
+    if (!notification || !this.isEntitled(notification.id)) return 'form_limit';
+    var plan = LicenseService.getPlan();
+    var conditions = notification.filter && notification.filter.conditions ? notification.filter.conditions : [];
+    if (conditions.length > plan.maxConditions) return 'filter_limit';
+    if (notification.messageType === 'payload' && !plan.allowsPayload) return 'payload_not_available';
+    return null;
   },
 
   getEnabled: function () {
@@ -146,8 +168,6 @@ var NotificationService = {
     var term = String(search || '').trim().toLowerCase();
     var size = pageSize || 10;
     var currentFormId = FieldService.getFormId();
-    var entitledIds = this.getEntitled().map(function (notification) { return notification.id; });
-    var maxConditions = LicenseService.getPlan().maxConditions;
     var all = this.getAllRaw().slice().sort(function (a, b) { return String(b.updatedAt).localeCompare(String(a.updatedAt)); });
     var filtered = term ? all.filter(function (notification) {
       return String(notification.formTitle || '').toLowerCase().indexOf(term) !== -1;
@@ -156,10 +176,9 @@ var NotificationService = {
     var currentPage = Math.min(Math.max(1, Number(page) || 1), totalPages);
     return {
       items: filtered.slice((currentPage - 1) * size, currentPage * size).map(function (notification) {
-        var conditions = notification.filter && notification.filter.conditions ? notification.filter.conditions : [];
         return NotificationService.toListItem(
           notification,
-          entitledIds.indexOf(notification.id) !== -1 && conditions.length <= maxConditions,
+          NotificationService.getPlanBlockReason(notification),
           currentFormId
         );
       }),
@@ -170,13 +189,15 @@ var NotificationService = {
     };
   },
 
-  toListItem: function (notification, entitled, currentFormId) {
+  toListItem: function (notification, planBlockReason, currentFormId) {
     return {
       id: notification.id,
       formId: notification.formId,
       formTitle: notification.formTitle || 'Untitled form',
       enabled: notification.enabled !== false,
-      entitled: entitled !== false,
+      entitled: !planBlockReason,
+      planBlocked: Boolean(planBlockReason),
+      planBlockedReason: planBlockReason || null,
       isCurrentForm: notification.formId === currentFormId
     };
   },
@@ -203,10 +224,13 @@ var NotificationService = {
     return ConfigService.withUserLock(function () {
       var notification = NotificationService.getById(id);
       if (!notification) throw new Error('Form alert not found.');
+      if (enabled === true && NotificationService.getPlanBlockReason(notification)) {
+        throw new Error('This Form alert is paused by the current plan limit. Upgrade or remove another connected Form first.');
+      }
       notification.enabled = enabled === true;
       notification.updatedAt = new Date().toISOString();
       NotificationService.writeFormConfig(notification);
-      return NotificationService.toListItem(notification, NotificationService.isEntitled(id), FieldService.getFormId());
+      return NotificationService.toListItem(notification, NotificationService.getPlanBlockReason(notification), FieldService.getFormId());
     });
   },
 

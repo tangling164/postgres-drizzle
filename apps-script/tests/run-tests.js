@@ -31,6 +31,12 @@ let documentLockDepth = 0
 let userLockEntries = 0
 let userLockDepth = 0
 let formResponses = []
+let backendFreeUsed = 0
+let backendFreeLimit = 30
+let backendTrialExpiresAt = '2099-01-01T00:00:00.000Z'
+let backendReservationCounter = 0
+const backendReservations = new Set()
+let backendTestAuthorizations = 0
 
 function fakeItem(id, title, type = 'TEXT') {
   return {
@@ -192,11 +198,59 @@ for (const file of serviceFiles) {
   vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file })
 }
 
-context.BackendService.getPlan = () => ({
-  plan: context.LicenseService.getPlan().plan,
-  billing_cycle: userProperties.getProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE),
-  valid_until: userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
-})
+function backendPlanResponse() {
+  const plan = context.LicenseService.getPlan().plan
+  return {
+    plan,
+    billing_cycle: userProperties.getProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE),
+    valid_until: userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
+    free_trial: {
+      expires_at: backendTrialExpiresAt,
+      send_limit: backendFreeLimit,
+      send_used: backendFreeUsed,
+      status: backendFreeUsed >= backendFreeLimit ? 'exhausted' : 'active',
+    },
+  }
+}
+
+function syncBackendFreeUsage() {
+  userProperties.setProperty(context.FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT, backendTrialExpiresAt)
+  userProperties.setProperty(context.FormAlertConfig.KEYS.FREE_SEND_LIMIT, String(backendFreeLimit))
+  userProperties.setProperty(context.FormAlertConfig.KEYS.FREE_SEND_USED, String(backendFreeUsed))
+}
+
+context.BackendService.getPlan = () => backendPlanResponse()
+context.BackendService.authorizeTest = () => {
+  backendTestAuthorizations += 1
+  const response = backendPlanResponse()
+  if (response.plan === 'none') throw new Error('Your Free trial has ended. Upgrade to continue sending alerts.')
+  return response
+}
+context.BackendService.reserveSend = () => {
+  const plan = context.LicenseService.getPlan().plan
+  if (plan === 'standard' || plan === 'business') return { reserved: false, plan }
+  if (plan === 'none') throw new Error('Your Free trial has ended. Upgrade to continue sending alerts.')
+  if (backendFreeUsed >= backendFreeLimit) throw new Error('Free send limit reached. Upgrade to continue sending alerts.')
+  backendFreeUsed += 1
+  syncBackendFreeUsage()
+  const reservationId = `00000000-0000-0000-0000-${String(++backendReservationCounter).padStart(12, '0')}`
+  backendReservations.add(reservationId)
+  return {
+    reserved: true,
+    reservation_id: reservationId,
+    free_trial: {
+      expires_at: backendTrialExpiresAt,
+      send_limit: backendFreeLimit,
+      send_used: backendFreeUsed,
+    },
+  }
+}
+context.BackendService.releaseSend = reservationId => {
+  if (!backendReservations.delete(reservationId)) return { released: false, send_used: null }
+  backendFreeUsed = Math.max(0, backendFreeUsed - 1)
+  syncBackendFreeUsage()
+  return { released: true, send_used: backendFreeUsed }
+}
 
 const readFieldsFromForm = context.FieldService.getFields.bind(context.FieldService)
 const readLatestResponse = context.FieldService.getLatestResponse.bind(context.FieldService)
@@ -232,6 +286,20 @@ function throws(fn, pattern) {
 }
 function setPlan(plan, billingCycle) {
   userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN, plan)
+  if (plan === 'standard' || plan === 'business') {
+    userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT, '2099-01-01T00:00:00.000Z')
+  } else {
+    userProperties.deleteProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT)
+  }
+  if (plan === 'free') {
+    backendFreeUsed = 0
+    backendTrialExpiresAt = '2099-01-01T00:00:00.000Z'
+    syncBackendFreeUsage()
+  } else if (plan === 'none') {
+    backendFreeUsed = backendFreeLimit
+    backendTrialExpiresAt = '2000-01-01T00:00:00.000Z'
+    syncBackendFreeUsage()
+  }
   if (billingCycle) userProperties.setProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE, billingCycle)
   else userProperties.deleteProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE)
   return context.LicenseService.getUsage()
@@ -521,19 +589,43 @@ test('one Form stores one user-level alert and installs one trigger', () => {
   switchToActiveForm()
 })
 
-test('current plan entitles connected Forms by most recent update', () => {
+test('current plan entitles connected Forms by oldest creation time', () => {
   setPlan('free')
   const all = context.NotificationService.getAllRaw()
-  all[1].updatedAt = '2099-01-01T00:00:00.000Z'
-  context.NotificationService.writeFormConfig(all[1])
+  const oldest = all.slice().sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)))[0]
+  const newer = all.filter(notification => notification.id !== oldest.id)[0]
+  newer.updatedAt = '2099-01-01T00:00:00.000Z'
+  context.NotificationService.writeFormConfig(newer)
   equal(context.NotificationService.getEnabled().length, 1)
   equal(context.NotificationService.getEntitled().length, 1)
-  equal(context.NotificationService.isEntitled(all[1].id), true)
-  equal(context.NotificationService.isEntitled(all[0].id), false)
+  equal(context.NotificationService.isEntitled(oldest.id), true)
+  equal(context.NotificationService.isEntitled(newer.id), false)
+  equal(context.NotificationService.getPlanBlockReason(newer), 'form_limit')
+  throws(() => context.NotificationService.setEnabled(newer.id, true), /paused by the current plan limit/)
   throws(() => context.LicenseService.assertCanSave({ id: null, filter: validNotification.filter }, context.NotificationService.getAllRaw()), /1 connected Google Form/)
   throws(() => context.NotificationService.save({ ...validNotification, id: 'missing-notification' }), /does not belong/)
   throws(() => context.testNotificationApi({ ...validNotification, id: 'missing-notification' }), /does not belong/)
   throws(() => context.NotificationService.remove('missing-notification'), /not found/)
+})
+
+test('legacy connected Forms freeze createdAt before later edits', () => {
+  const original = context.NotificationService.getAllRaw()[0]
+  const legacy = { ...original, updatedAt: '2020-01-01T00:00:00.000Z' }
+  delete legacy.createdAt
+  context.ConfigService.writeJson(
+    userProperties,
+    context.NotificationService.configKey(legacy.formId),
+    legacy,
+  )
+  const backfilled = context.NotificationService.readFormConfig(legacy.formId)
+  equal(backfilled.createdAt, '2020-01-01T00:00:00.000Z')
+  backfilled.updatedAt = '2099-01-01T00:00:00.000Z'
+  context.NotificationService.writeFormConfig(backfilled)
+  equal(
+    context.NotificationService.readFormConfig(legacy.formId).createdAt,
+    '2020-01-01T00:00:00.000Z',
+  )
+  context.NotificationService.writeFormConfig(original)
 })
 
 test('Connected Forms supports unique form IDs, title search, and ten-item pagination', () => {
@@ -560,7 +652,7 @@ test('Connected Forms supports unique form IDs, title search, and ten-item pagin
   equal(context.getSidebarBootstrap().notifications.length, 3)
   equal(context.getSidebarBootstrap().userEmail, 'tester@example.com')
   equal(context.getSidebarBootstrap().formCount, 11)
-  equal(context.getSidebarBootstrap().appVersion, '1.7.2-plan-cycle')
+  equal(context.getSidebarBootstrap().appVersion, '1.8.0-m15-readiness')
 })
 
 test('Business allows 100 connected Forms and paused Forms still count toward the limit', () => {
@@ -610,7 +702,7 @@ test('trigger failures expose needs setup and can be fixed', () => {
   switchToActiveForm()
   triggers.splice(0, triggers.length)
   triggerShouldFail = true
-  const saved = context.NotificationService.save(context.NotificationService.getAll()[0])
+  const saved = context.NotificationService.save(context.NotificationService.getCurrentFormConfig())
   equal(saved.triggerStatus.state, 'needs_setup')
   equal(context.DebugService.getLastStatus().reasonCode, 'TRIGGER_SETUP_FAILED')
   triggerShouldFail = false
@@ -690,6 +782,7 @@ test('execution sends matched responses, skips nonmatches, and records test stat
 test('Send Test skips filters, static templates need no response, and latest response test applies filters', () => {
   setPlan('free')
   switchToActiveForm()
+  backendTestAuthorizations = 0
   let sends = 0
   context.SlackService.send = () => {
     sends += 1
@@ -708,17 +801,22 @@ test('Send Test skips filters, static templates need no response, and latest res
       ],
     },
   }
-  equal(context.sendTestApi(staticNotification).status, 'test')
-  equal(sends, 1)
+  throws(() => context.sendTestApi(staticNotification), /up to 0 filter conditions/)
+  equal(sends, 0)
   context.FieldService.getLatestResponse = () => ({
     12: { fieldId: '12', title: 'Message', value: 'hello' },
     13: { fieldId: '13', title: 'Priority', value: 'Low' },
   })
   equal(context.testLatestResponseApi({ ...staticNotification, filter: { match: 'all', conditions: [] } }).status, 'test')
-  equal(sends, 2)
+  equal(sends, 1)
   setPlan('standard')
   equal(context.testLatestResponseApi(staticNotification).status, 'skipped')
-  equal(sends, 2)
+  equal(sends, 1)
+  equal(backendTestAuthorizations, 3)
+  setPlan('none')
+  throws(() => context.sendTestApi({ ...staticNotification, filter: { match: 'all', conditions: [] } }), /Free trial has ended/)
+  equal(sends, 1)
+  setPlan('standard')
 })
 
 test('Budget greater than 100 sends while Budget at or below 100 skips', () => {
@@ -767,7 +865,14 @@ test('automatic execution enforces condition limits after a plan downgrade', () 
   equal(context.DebugService.getLastStatus().reasonCode, 'PLAN_LIMIT')
   const original = context.NotificationService.getCurrentFormConfig()
   context.NotificationService.writeFormConfig({ ...original, filter: downgradedNotification.filter, updatedAt: '2099-12-31T00:00:00.000Z' })
-  equal(context.NotificationService.getPage('', 1, 10).items[0].entitled, false)
+  const blocked = context.NotificationService.getPage('', 1, 200).items.filter(item => item.id === original.id)[0]
+  equal(blocked.entitled, false)
+  equal(blocked.planBlocked, true)
+  equal(blocked.planBlockedReason, 'filter_limit')
+  const automatic = context.ExecutionService.runAll({ Message: 'refund', Priority: 'High' }, original.formId)
+  equal(automatic[0].status, 'paused')
+  equal(automatic[0].message, 'Paused by plan limit.')
+  equal(context.DebugService.getLastStatus().reasonCode, 'PLAN_LIMIT')
   context.NotificationService.writeFormConfig(original)
 })
 
@@ -782,7 +887,15 @@ test('automatic submissions refresh the remote plan before enforcing paid featur
     updatedAt: '2099-12-31T00:00:00.000Z',
   }
   context.NotificationService.writeFormConfig(paidOnlyNotification)
-  context.BackendService.getPlan = () => ({ plan: 'free', valid_until: null })
+  context.BackendService.getPlan = () => ({
+    plan: 'free',
+    valid_until: null,
+    free_trial: {
+      expires_at: backendTrialExpiresAt,
+      send_limit: backendFreeLimit,
+      send_used: backendFreeUsed,
+    },
+  })
   let sends = 0
   context.SlackService.send = () => {
     sends += 1
@@ -791,7 +904,8 @@ test('automatic submissions refresh the remote plan before enforcing paid featur
 
   const results = context.ExecutionService.runAll({ Message: 'refund please' }, paidOnlyNotification.formId)
   equal(context.LicenseService.getUsage().plan, 'free')
-  equal(results[0].status, 'error')
+  equal(results[0].status, 'paused')
+  equal(results[0].message, 'Paused by plan limit.')
   equal(sends, 0)
 
   context.BackendService.getPlan = originalPlanLoader
@@ -801,14 +915,16 @@ test('automatic submissions refresh the remote plan before enforcing paid featur
 test('tests do not consume Free credits while real sends do', () => {
   setPlan('free')
   switchToActiveForm()
-  documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, '0')
+  backendFreeUsed = 0
+  syncBackendFreeUsage()
   context.SlackService.send = () => ({ ok: true, responseCode: 200 })
   const notification = context.NotificationService.getCurrentFormConfig()
   context.ExecutionService.run(notification, { Message: 'refund please' }, { isTest: true })
   equal(context.LicenseService.getUsage().creditsLeft, 30)
   context.ExecutionService.run(notification, { Message: 'refund please' }, { isTest: false })
   equal(context.LicenseService.getUsage().creditsLeft, 29)
-  documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, '30')
+  backendFreeUsed = 30
+  syncBackendFreeUsage()
   throws(() => context.LicenseService.assertCanSend(), /Free limit reached/)
 })
 
@@ -816,7 +932,8 @@ test('Free credits are reserved atomically and rolled back when Slack fails', ()
   setPlan('free')
   switchToActiveForm()
   const notification = context.NotificationService.getCurrentFormConfig()
-  documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, '29')
+  backendFreeUsed = 29
+  syncBackendFreeUsage()
 
   context.SlackService.send = () => ({ ok: false, responseCode: 400, error: 'Slack returned an error. Please check your webhook.' })
   equal(context.ExecutionService.run(notification, { Message: 'refund please' }, { isTest: false }).status, 'error')
@@ -836,6 +953,31 @@ test('Free credits are reserved atomically and rolled back when Slack fails', ()
   equal(context.ExecutionService.run(notification, { Message: 'refund please' }, { isTest: false }).status, 'error')
   equal(sends, 1)
   equal(context.LicenseService.getUsage().creditsUsed, 30)
+})
+
+test('Free usage is account-level across connected Forms and cached paid expiry fails closed', () => {
+  setPlan('free')
+  switchToActiveForm()
+  backendFreeUsed = 4
+  syncBackendFreeUsage()
+  equal(context.LicenseService.getUsage().creditsUsed, 4)
+  switchForm('form-2', 'Support Request Form')
+  equal(context.LicenseService.getUsage().creditsUsed, 4)
+  context.LicenseService.recordSend()
+  equal(context.LicenseService.getUsage().creditsUsed, 5)
+  switchToActiveForm()
+  equal(context.LicenseService.getUsage().creditsUsed, 5)
+
+  setPlan('standard', 'yearly')
+  userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT, '2000-01-01T00:00:00.000Z')
+  equal(context.LicenseService.getUsage().plan, 'free')
+  equal(context.LicenseService.getUsage().maxForms, 1)
+  userProperties.deleteProperty(context.FormAlertConfig.KEYS.FREE_TRIAL_EXPIRES_AT)
+  equal(context.LicenseService.getUsage().plan, 'none')
+  equal(context.LicenseService.getUsage().creditsTotal, null)
+  equal(context.LicenseService.getUsage().creditsLeft, 0)
+  throws(() => context.LicenseService.assertCanSend(), /Free trial has ended/)
+  setPlan('free')
 })
 
 test('debug logs keep only ten redacted metadata entries', () => {
@@ -867,9 +1009,24 @@ test('debug logs keep only ten redacted metadata entries', () => {
   equal(debugInfo.includes('hooks.slack.com/services'), false)
   equal(Object.prototype.hasOwnProperty.call(context.DebugService.getDebugInfo().triggerStatus, 'error'), false)
   equal(context.DebugService.getDebugInfo().formCount, context.NotificationService.getAllRaw().length)
+  equal(
+    JSON.stringify(context.DebugService.getDebugInfo().standardReadiness),
+    JSON.stringify(context.TriggerService.getReadinessSummary()),
+  )
+  equal(
+    context.DebugService.getDebugInfo().standardReadiness.enabledForms,
+    context.NotificationService.getAllRaw().filter(notification => notification.enabled !== false).length,
+  )
+  const copiedDebugInfo = JSON.parse(context.copyDebugInfoApi())
+  ok(copiedDebugInfo.planSyncedAt)
+  ok(new Date(copiedDebugInfo.capturedAt).getTime() >= new Date(copiedDebugInfo.planSyncedAt).getTime())
   equal(context.DebugService.getPanelData().lastStatus, 'sent')
   equal(context.DebugService.getPanelData().lastError, null)
   equal(context.DebugService.getPanelData().recentDebugLogs.length, 10)
+  equal(
+    context.DebugService.sanitizeEntry({ status: 'error', reasonCode: 'PLAN_SYNC_ERROR' }).reasonCode,
+    'PLAN_SYNC_ERROR',
+  )
   documentProperties.setProperty(context.FormAlertConfig.KEYS.DEBUG_LOGS, JSON.stringify([{
     timestamp: '2026-06-09T00:00:00.000Z legacy@example.com',
     notificationId: 'https://hooks.slack.com/services/T/B/secret',
@@ -924,22 +1081,24 @@ test('single-property storage rejects oversized Form alert data', () => {
 })
 
 test('corrupt local property values recover to safe defaults', () => {
+  setPlan('free')
   const formIndex = userProperties.getProperty(context.FormAlertConfig.KEYS.FORM_INDEX)
   const logs = documentProperties.getProperty(context.FormAlertConfig.KEYS.DEBUG_LOGS)
-  const credits = documentProperties.getProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED)
+  const credits = userProperties.getProperty(context.FormAlertConfig.KEYS.FREE_SEND_USED)
   userProperties.setProperty(context.FormAlertConfig.KEYS.FORM_INDEX, '{"unexpected":true}')
   documentProperties.setProperty(context.FormAlertConfig.KEYS.DEBUG_LOGS, '{"unexpected":true}')
-  documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, 'not-a-number')
+  userProperties.setProperty(context.FormAlertConfig.KEYS.FREE_SEND_USED, 'not-a-number')
   equal(context.NotificationService.getAllRaw().length, 0)
   equal(context.DebugService.getLogs().length, 0)
   equal(context.LicenseService.getUsedCredits(), 0)
-  equal(context.LicenseService.getUsage().creditsLeft, 30)
+  equal(context.LicenseService.getUsage().plan, 'none')
+  equal(context.LicenseService.getUsage().creditsLeft, 0)
   context.DebugService.write('error', null, { reasonCode: 'EXECUTION_ERROR' })
   equal(context.DebugService.getLogs().length, 1)
   equal(context.DebugService.getLogs()[0].reasonCode, 'EXECUTION_ERROR')
   userProperties.setProperty(context.FormAlertConfig.KEYS.FORM_INDEX, formIndex)
   documentProperties.setProperty(context.FormAlertConfig.KEYS.DEBUG_LOGS, logs)
-  documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, credits)
+  userProperties.setProperty(context.FormAlertConfig.KEYS.FREE_SEND_USED, credits)
 })
 
 test('manifest and source allow only Slack and the FormAlert entitlement API', () => {
@@ -973,6 +1132,7 @@ test('manifest and source allow only Slack and the FormAlert entitlement API', (
   ok(sidebar.includes('Send Test'))
   ok(sidebar.includes('Test latest response'))
   ok(sidebar.includes('Plan sync needs attention'))
+  ok(sidebar.includes('Paused by plan limit'))
   ok(sidebar.includes('Identity audience:'))
   ok(sidebar.includes('Build '))
   equal(/\bfetch\s*\(|XMLHttpRequest/.test(sidebar), false)

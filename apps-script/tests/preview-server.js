@@ -16,7 +16,7 @@ const mockScript = `
   const previewNotifications = [
     { id: 'notif-1', formId: 'form-1', formTitle: 'Chinese101 Feedback Form', enabled: true, entitled: true, isCurrentForm: true },
     { id: 'notif-2', formId: 'form-2', formTitle: 'Support Request Form', enabled: true, entitled: true, isCurrentForm: false },
-    { id: 'notif-3', formId: 'form-3', formTitle: 'Course Signup Form', enabled: false, entitled: true, isCurrentForm: false }
+    { id: 'notif-3', formId: 'form-3', formTitle: 'Course Signup Form', enabled: true, entitled: false, planBlocked: true, planBlockedReason: 'form_limit', isCurrentForm: false }
   ];
   const previewEditor = {
     id: null, name: '', enabled: true, webhookUrl: '', messageType: 'message',
@@ -26,7 +26,7 @@ const mockScript = `
   };
   const handlers = {
     getSidebarBootstrap: () => ({
-      appVersion: '1.7.2-plan-cycle',
+      appVersion: '1.8.0-m15-readiness',
       userEmail: 'user@example.com',
       usage: { plan: 'business', label: 'Business', displayLabel: 'Business / Yearly', billingCycle: 'yearly', maxForms: 100, maxNotifications: 100, maxConditions: 50, allowsPayload: true, creditsTotal: null, creditsUsed: 0, creditsLeft: null },
       planSyncWarning: null,

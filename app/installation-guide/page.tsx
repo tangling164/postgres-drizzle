@@ -16,7 +16,7 @@ const toc = [
   'Install and open FormAlert from Forms',
   'Create a Slack Incoming Webhook',
   'Configure Message or Payload Mode',
-  'Create a Filter Rule',
+  'Create a Standard Filter Rule',
   'Test the latest response',
   'Install the trigger',
   'Troubleshoot common errors',
@@ -41,10 +41,10 @@ export default function InstallationGuidePage() {
           <GuideStep number={3} title="Create a Slack Incoming Webhook" description="Create an Incoming Webhook in Slack, copy its URL, and paste it into FormAlert. Save and test the connection.">
             <Callout title="Webhook privacy" kind="privacy">The Webhook URL is saved in your Apps Script PropertiesService, not on FormAlert servers.</Callout>
           </GuideStep>
-          <GuideStep number={4} title="Configure Message or Payload Mode" description="Use Message Mode for a Markdown notification, or paste JSON from Slack Block Kit Builder into Payload Mode. Insert fields such as {{Name}} or {{Budget}}.">
+          <GuideStep number={4} title="Configure Message or Payload Mode" description="Use Message Mode on every active plan. Standard can also paste JSON from Slack Block Kit Builder into Payload Mode. Insert fields such as {{Name}} or {{Budget}}.">
             <div className="mode-grid"><div><SlackLogo weight="fill" /><strong>Message Mode</strong><p>Write a readable Slack message with Form question variables.</p></div><div><Code weight="fill" /><strong>Payload Mode</strong><p>Validate official Slack Block Kit payload JSON before sending.</p></div></div>
           </GuideStep>
-          <GuideStep number={5} title="Create a Filter Rule" description="Choose a field, select equals, contains, or greater than, then enter the value that should trigger Slack.">
+          <GuideStep number={5} title="Create a Standard Filter Rule" description="On Standard, choose a field, select equals, contains, or greater than, then enter the value that should trigger Slack. Free sends without Filter Rules.">
             <PluginScreenshot src="/product/rule-editor.png" alt="FormAlert filter rule editor" caption="A field rule is evaluated locally before FormAlert sends to Slack." />
           </GuideStep>
           <GuideStep number={6} title="Test the latest response" description="Run the current rule against the latest response. FormAlert shows whether it matched, renders the message, and sends the test directly to Slack.">

@@ -2,7 +2,7 @@ var ExecutionService = {
   run: function (notification, responseMap, options) {
     options = options || {};
     var isTest = options.isTest === true;
-    var releaseReservedCredit = false;
+    var reservedCreditId = false;
     if (options.skipFilter !== true) {
       try {
         LicenseService.assertCanExecute(notification);
@@ -26,12 +26,12 @@ var ExecutionService = {
 
     try {
       var payload = this.render(notification, responseMap);
-      if (!isTest) releaseReservedCredit = LicenseService.reserveSendCredit();
+      if (!isTest) reservedCreditId = LicenseService.reserveSendCredit();
       var slackResult = SlackService.send(notification.webhookUrl, payload);
       if (!slackResult.ok) {
-        if (releaseReservedCredit) {
-          LicenseService.releaseSendCredit();
-          releaseReservedCredit = false;
+        if (reservedCreditId) {
+          LicenseService.releaseSendCredit(reservedCreditId);
+          reservedCreditId = false;
         }
         DebugService.write('error', notification, {
           reasonCode: 'SLACK_ERROR',
@@ -39,14 +39,14 @@ var ExecutionService = {
         });
         return { ok: false, status: 'error', message: slackResult.error };
       }
-      releaseReservedCredit = false;
+      reservedCreditId = false;
       DebugService.write(isTest ? 'test' : 'sent', notification, {
         reasonCode: isTest ? 'TEST_SENT' : 'SLACK_SENT',
         slackResponseCode: slackResult.responseCode
       });
       return { ok: true, status: isTest ? 'test' : 'sent', message: isTest ? 'Test sent to Slack.' : 'Notification sent to Slack.' };
     } catch (error) {
-      if (releaseReservedCredit) LicenseService.releaseSendCredit();
+      if (reservedCreditId) LicenseService.releaseSendCredit(reservedCreditId);
       DebugService.write('error', notification, { reasonCode: 'EXECUTION_ERROR' });
       return { ok: false, status: 'error', message: error.message };
     }
@@ -74,7 +74,11 @@ var ExecutionService = {
       DebugService.write('error', null, { reasonCode: 'PLAN_SYNC_ERROR' });
     }
     var notification = NotificationService.getByFormId(formId || FieldService.getFormId());
-    if (!notification || !NotificationService.isEntitled(notification.id)) return [];
+    if (!notification) return [];
+    if (NotificationService.getPlanBlockReason(notification)) {
+      DebugService.write('paused', notification, { reasonCode: 'PLAN_LIMIT' });
+      return [{ ok: true, status: 'paused', message: 'Paused by plan limit.' }];
+    }
     if (notification.enabled === false) {
       DebugService.write('paused', notification, { reasonCode: 'PAUSED' });
       return [{ ok: true, status: 'paused', message: 'Form alert is paused.' }];

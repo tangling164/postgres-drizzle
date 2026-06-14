@@ -93,6 +93,21 @@ var BackendService = {
     return this.request('/v2/account/plan');
   },
 
+  reserveSend: function () {
+    return this.request('/v2/account/send/reserve', { method: 'post', payload: {} });
+  },
+
+  releaseSend: function (reservationId) {
+    return this.request('/v2/account/send/release', {
+      method: 'post',
+      payload: { reservation_id: reservationId }
+    });
+  },
+
+  authorizeTest: function () {
+    return this.request('/v2/account/test/authorize', { method: 'post', payload: {} });
+  },
+
   errorMessage: function (errorCode, status, identityToken) {
     var messages = {
       unauthorized: 'Google authorization was rejected. Identity audience: ' + (this.getIdentityAudience(identityToken) || 'unavailable') + '.',
@@ -101,7 +116,12 @@ var BackendService = {
       license_revoked: 'This license code is no longer active. Contact support if you need help.',
       license_expired: 'This license code has expired. Purchase a new plan to continue.',
       lower_tier_license_not_allowed: 'Your current plan is higher than this license. Use the matching or higher-tier license.',
-      rate_limited: 'Too many activation attempts. Wait a few minutes and try again.'
+      rate_limited: 'Too many activation attempts. Wait a few minutes and try again.',
+      test_rate_limited: 'Test limit reached. Wait a few minutes before sending another test.',
+      free_trial_expired: 'Your Free trial has ended. Upgrade to continue sending alerts.',
+      free_trial_exhausted: 'Free send limit reached. Upgrade to continue sending alerts.',
+      no_entitlement: 'No active plan is available. Upgrade to continue sending alerts.',
+      invalid_reservation: 'The send reservation could not be released.'
     };
     return messages[errorCode] || (status >= 500
       ? 'The license service is temporarily unavailable. Try again in a moment.'

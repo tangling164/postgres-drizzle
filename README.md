@@ -17,8 +17,11 @@ Copy `.env.example` and configure:
 
 - `NEXT_PUBLIC_SITE_URL`
 - `NEXT_PUBLIC_MARKETPLACE_URL`
-- Four Creem Checkout URLs for Standard and Business monthly/yearly plans
+- Two Creem Checkout URLs for Standard monthly/yearly plans
 - `NEXT_PUBLIC_SUPPORT_EMAIL`
+
+Production pricing only enables Standard checkout for HTTPS Creem URLs outside
+Creem Test mode. Run `pnpm test:m15 -- verify-live-config` before opening sales.
 
 ## Product Boundary
 

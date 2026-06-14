@@ -1,16 +1,7 @@
-import {
-  ArrowRight,
-  Bug,
-  ChartLineUp,
-  CheckCircle,
-  Code,
-  FunnelSimple,
-  PaperPlaneTilt,
-  UsersThree,
-} from '@phosphor-icons/react/dist/ssr'
+import { PaperPlaneTilt } from '@phosphor-icons/react/dist/ssr'
 import type { Metadata } from 'next'
 import { ButtonLink } from '@/components/site/site-shell'
-import { FeatureList, PluginScreenshot, PrivacyStrip, SectionHeading, WorkflowSteps } from '@/components/site/content'
+import { PluginScreenshot, PrivacyStrip } from '@/components/site/content'
 import { PricingSection } from '@/components/site/pricing'
 import { SoftwareApplicationJsonLd } from '@/components/site/seo'
 import { siteConfig } from '@/components/site/config'
@@ -21,69 +12,78 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 }
 
-const features = [
-  { icon: <FunnelSimple weight="fill" />, title: 'Filter Rules', text: 'Send only responses that match equals, contains, or greater-than field rules.' },
-  { icon: <Code weight="fill" />, title: 'Message & Payload Mode', text: 'Write Markdown messages or paste official Slack Block Kit payload JSON.' },
-  { icon: <CheckCircle weight="fill" />, title: 'Local Status & Debug', text: 'See the latest status and copy redacted debug info from the add-on.' },
-]
-
-const useCases = [
-  { icon: <ChartLineUp weight="fill" />, title: 'Sales leads', text: 'Notify Slack when a lead meets your budget or qualification threshold.' },
-  { icon: <UsersThree weight="fill" />, title: 'Customer feedback', text: 'Route high-priority feedback and refund requests to the right channel.' },
-  { icon: <Bug weight="fill" />, title: 'Bug reports', text: 'Alert the team only when severity or impact matches your rule.' },
-]
-
 export default function HomePage() {
   return (
     <main>
       <SoftwareApplicationJsonLd />
-      <section className="landing-hero">
-        <div className="landing-hero-copy">
-          <span className="eyebrow">Filtered Slack alerts for Google Forms</span>
-          <h1>Send important form responses to Slack.</h1>
-          <p>Add field rules in the current Google Form. Matching notifications go directly from Apps Script to your Slack Webhook.</p>
-          <div className="hero-actions">
-            <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert App <PaperPlaneTilt weight="fill" /></ButtonLink>
-            <ButtonLink href="/installation-guide" variant="secondary">View setup guide</ButtonLink>
+
+      <section className="landing-hero-v2">
+        <h1>Only notify Slack when a response matches.</h1>
+        <p>Field-filtered alerts for Google Forms.</p>
+        <div className="hero-actions hero-actions-centered">
+          <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert Free <PaperPlaneTilt weight="fill" /></ButtonLink>
+          <ButtonLink href="#how-it-works" variant="secondary">See how it works</ButtonLink>
+        </div>
+        <div className="hero-video-wrap">
+          {/* TODO: replace /product/demo.mp4 with the actual walkthrough video */}
+          <video
+            className="hero-video"
+            poster="/product/rule-editor.png"
+            controls
+            preload="none"
+            width={1720}
+            height={967}
+          >
+            <source src="/product/demo.mp4" type="video/mp4" />
+          </video>
+        </div>
+      </section>
+
+      <section className="how-it-works" id="how-it-works">
+        <div className="how-it-works-inner">
+          <h2 className="how-it-works-heading">Set up in under 5 minutes</h2>
+
+          <div className="how-step">
+            <div className="how-step-copy">
+              <p className="how-step-num">Step 1</p>
+              <h3>Install FormAlert</h3>
+              <p>Open your Google Form, click Add-ons, and install FormAlert from the Marketplace.</p>
+            </div>
+            {/* TODO: replace with /product/addon-install.png once screenshot is available */}
+            <PluginScreenshot
+              src="/product/delivery-logs.png"
+              alt="FormAlert running inside the Google Forms editor"
+              caption="Install directly from the Google Forms editor Add-ons menu."
+            />
+          </div>
+
+          <div className="how-step how-step-flipped">
+            <div className="how-step-copy">
+              <p className="how-step-num">Step 2</p>
+              <h3>Add your Webhook</h3>
+              <p>Paste your Slack Webhook URL and write your message. Done.</p>
+            </div>
+            {/* TODO: replace with webhook config screenshot once available */}
+            <PluginScreenshot
+              src="/product/license-activation.png"
+              alt="FormAlert configuration screen showing Webhook URL and message fields"
+              caption="Paste your Slack Webhook URL and write your notification message."
+            />
+          </div>
+
+          <div className="how-step">
+            <div className="how-step-copy">
+              <p className="how-step-num">Step 3</p>
+              <h3>Set a filter rule</h3>
+              <p>Choose a field and a condition. FormAlert only notifies Slack when a response matches. Free plan works without this step.</p>
+            </div>
+            <PluginScreenshot
+              src="/product/rule-editor.png"
+              alt="FormAlert rule editor showing field, condition, and value configuration"
+              caption="Add a rule to filter out responses that do not matter."
+            />
           </div>
         </div>
-        <PluginScreenshot src="/product/rule-editor.png" alt="FormAlert rule editor inside the Google Forms Editor Add-on" caption="Configure a field rule, message, and direct Slack delivery inside the add-on." priority />
-      </section>
-
-      <section className="content-section workflow-section">
-        <SectionHeading eyebrow="One focused workflow" title="Filter before you notify." description="FormAlert adds one useful decision between a Google Forms submission and a Slack notification." />
-        <div className="simple-flow"><span>Google Form</span><ArrowRight /><span>Field Filter</span><ArrowRight /><span>Slack notification</span></div>
-      </section>
-
-      <section className="content-section">
-        <SectionHeading title="Everything needed to keep Slack useful." />
-        <FeatureList items={features} variant="capabilities" />
-      </section>
-
-      <section className="content-section product-proof">
-        <div>
-          <span className="eyebrow">Inside the add-on</span>
-          <h2>Core work stays with your Google Form.</h2>
-          <p>Webhook setup, question selection, rules, tests, and local debug status all happen inside the Google Forms Editor Add-on. The website exists to help you install, learn, and upgrade.</p>
-          <ButtonLink href="/installation-guide" variant="secondary">See the complete setup</ButtonLink>
-        </div>
-        <PluginScreenshot src="/product/delivery-logs.png" alt="FormAlert local status and debug controls" caption="Last status and redacted debug info stay local to the add-on." />
-      </section>
-
-      <section className="content-section">
-        <SectionHeading title="Useful for the submissions your team needs to act on." />
-        <FeatureList items={useCases} variant="use-cases" />
-      </section>
-
-      <section className="content-section setup-preview">
-        <SectionHeading title="A short path from Google Form to Slack." />
-        <WorkflowSteps items={[
-          { title: 'Open the Google Form', text: 'Open the Form you want to monitor in the Forms editor.' },
-          { title: 'Install FormAlert', text: 'Launch the add-on from the Forms editor add-on button.' },
-          { title: 'Configure and filter', text: 'Add your Slack Webhook, message, and field rule.' },
-          { title: 'Test and enable', text: 'Test with the latest response, then save to enable automatic alerts.' },
-        ]} />
-        <ButtonLink href="/installation-guide" variant="secondary">Read installation guide</ButtonLink>
       </section>
 
       <PrivacyStrip />
@@ -91,8 +91,8 @@ export default function HomePage() {
       <PricingSection />
 
       <section className="final-cta">
-        <div><h2>Send the responses that deserve attention.</h2><p>Install FormAlert in your current Google Form and create your first field filter.</p></div>
-        <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert App <PaperPlaneTilt weight="fill" /></ButtonLink>
+        <div><h2>Send the responses your team needs to act on.</h2></div>
+        <ButtonLink href={siteConfig.marketplaceUrl}>Get FormAlert Free <PaperPlaneTilt weight="fill" /></ButtonLink>
       </section>
     </main>
   )

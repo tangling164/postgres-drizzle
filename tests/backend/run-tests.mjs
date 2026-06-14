@@ -123,7 +123,9 @@ test('M1 transaction paths use the direct database connection', () => {
   for (const source of [
     'app/v2/license/activate/route.ts',
     'lib/backend/accounts.ts',
-    'app/api/jobs/downgrade-expired/route.ts',
+    'lib/backend/downgrade.ts',
+    'lib/backend/send-quota.ts',
+    'lib/backend/webhook-events.ts',
   ]) {
     const contents = readFileSync(join(repoRoot, source), 'utf8')
     assert.match(contents, /getSql\(\{ transaction: true \}\)/)
@@ -145,6 +147,18 @@ test('plan constants match spec §2.1 (confirmed 20/100)', () => {
   assert.equal(plans.PLAN_FORM_LIMITS.business, 100)
   assert.deepEqual(plans.planFeatures('free'), [])
   assert.ok(plans.planFeatures('business').includes('custom_payload'))
+})
+
+test('M1.5 public sale contract exposes Standard and keeps Free filterless', () => {
+  const pricing = readFileSync(join(repoRoot, 'components/site/pricing.tsx'), 'utf8')
+  const faq = readFileSync(join(repoRoot, 'components/site/faq.tsx'), 'utf8')
+  const config = readFileSync(join(repoRoot, 'components/site/config.ts'), 'utf8')
+  assert.match(pricing, /comingSoon: true/)
+  assert.doesNotMatch(pricing, /Priority support|Unlimited Slack sends/)
+  assert.match(faq, /Free does not include Filter Rules/)
+  assert.doesNotMatch(config, /businessMonthly|businessYearly/)
+  assert.match(config, /publicCreemCheckoutUrl/)
+  assert.doesNotMatch(config, /\/checkout\/success\?plan=/)
 })
 
 console.log('activation.ts (§5.1 state machine)')
@@ -330,6 +344,22 @@ test('signature verification round-trips and rejects tampering', () => {
   assert.equal(creem.verifyCreemSignature(body, null, 'whsec_test'), false)
 })
 
+test('Creem event identity prefers provider id and hashes fallback payloads', () => {
+  const withId = creem.creemEventIdentity(
+    { id: 'evt_1', eventType: 'checkout.completed' },
+    '{"id":"evt_1"}'
+  )
+  assert.equal(withId.eventId, 'evt_1')
+  assert.equal(withId.eventType, 'checkout.completed')
+  assert.equal(withId.payloadSha256.length, 64)
+
+  const fallback = creem.creemEventIdentity(
+    { eventType: 'refund.created' },
+    '{"eventType":"refund.created"}'
+  )
+  assert.match(fallback.eventId, /^sha256:[0-9a-f]{64}$/)
+})
+
 test('checkout.completed normalizes to a paid event', () => {
   const event = creem.normalizeCreemEvent({
     eventType: 'checkout.completed',
@@ -484,6 +514,91 @@ test('windowStartFor aligns to fixed windows', () => {
   const c = rateLimit.windowStartFor(rule, new Date('2026-06-12T10:01:01Z'))
   assert.equal(a.getTime(), b.getTime())
   assert.notEqual(b.getTime(), c.getTime())
+})
+
+test('Test send limiter is account-scoped and materially bounded', () => {
+  assert.equal(rateLimit.RATE_LIMIT_RULES.testSend.scope, 'test-send')
+  assert.equal(rateLimit.RATE_LIMIT_RULES.testSend.limit, 10)
+  assert.equal(rateLimit.RATE_LIMIT_RULES.testSend.windowSeconds, 600)
+})
+
+test('M1.5 migrations store only quota and Webhook metadata', () => {
+  const quotaMigration = readFileSync(
+    join(repoRoot, 'lib/db/migrations/0004_account_send_reservations.sql'),
+    'utf8'
+  )
+  const webhookMigration = readFileSync(
+    join(repoRoot, 'lib/db/migrations/0005_webhook_event_idempotency.sql'),
+    'utf8'
+  )
+  const subscriptionMigration = readFileSync(
+    join(repoRoot, 'lib/db/migrations/0006_unique_license_subscription.sql'),
+    'utf8'
+  )
+  const aliasMigration = readFileSync(
+    join(repoRoot, 'lib/db/migrations/0007_creem_order_aliases.sql'),
+    'utf8'
+  )
+  assert.match(quotaMigration, /send_reservations/)
+  assert.match(quotaMigration, /ON DELETE CASCADE/)
+  assert.doesNotMatch(quotaMigration, /send_reservation_status|released_at/)
+  assert.doesNotMatch(quotaMigration, /webhook_url|response_value|raw_payload|template/)
+  assert.match(webhookMigration, /payload_sha256/)
+  assert.doesNotMatch(webhookMigration, /raw_payload|response_value/)
+  assert.match(subscriptionMigration, /UNIQUE INDEX/)
+  assert.match(subscriptionMigration, /creem_subscription_id/)
+  assert.match(aliasMigration, /creem_order_aliases/)
+  assert.doesNotMatch(aliasMigration, /raw_payload|response_value/)
+})
+
+test('Creem Webhook retries while an identical event is still processing', () => {
+  const route = readFileSync(
+    join(repoRoot, 'app/api/webhooks/creem/route.ts'),
+    'utf8'
+  )
+  assert.match(route, /claim\.status === 'processing'/)
+  assert.match(route, /status: 503/)
+  assert.match(route, /'Retry-After': '30'/)
+})
+
+test('renewal and downgrade SQL preserve valid paid access', () => {
+  const handlers = readFileSync(
+    join(repoRoot, 'lib/backend/creem-handlers.ts'),
+    'utf8'
+  )
+  const downgrade = readFileSync(
+    join(repoRoot, 'lib/backend/downgrade.ts'),
+    'utf8'
+  )
+  assert.match(handlers, /GREATEST\(COALESCE\(valid_until/)
+  assert.match(handlers, /GREATEST\([\s\S]*COALESCE\(plan_expires_at/)
+  assert.match(downgrade, /FROM licenses l/)
+  assert.match(downgrade, /a\.plan_expires_at IS DISTINCT FROM l\.valid_until/)
+})
+
+test('M1.5 backend refuses Business purchase fulfillment by default', () => {
+  const handlers = readFileSync(
+    join(repoRoot, 'lib/backend/creem-handlers.ts'),
+    'utf8'
+  )
+  assert.match(handlers, /event\.plan === 'business'/)
+  assert.match(handlers, /ENABLE_BUSINESS_SALES !== 'true'/)
+})
+
+test('M1.5 database integration gate refuses production-equivalent and pooled targets before connecting', () => {
+  const integration = readFileSync(
+    join(repoRoot, 'tests/backend/run-db-integration.mjs'),
+    'utf8'
+  )
+  const loadEnvIndex = integration.indexOf('loadEnvFile()')
+  const sameTargetIndex = integration.indexOf('applicationTargets.includes(testTarget)')
+  const pooledTargetIndex = integration.indexOf("includes('-pooler.')")
+  const connectIndex = integration.indexOf('const admin = postgres(testUrl')
+  assert.ok(loadEnvIndex >= 0)
+  assert.ok(loadEnvIndex < sameTargetIndex)
+  assert.ok(sameTargetIndex < connectIndex)
+  assert.ok(pooledTargetIndex < connectIndex)
+  assert.match(integration, /replace\(\/-pooler/)
 })
 
 console.log('')

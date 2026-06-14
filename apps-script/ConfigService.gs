@@ -1,5 +1,5 @@
 var FormAlertConfig = {
-  APP_VERSION: '1.7.2-plan-cycle',
+  APP_VERSION: '1.8.0-m15-readiness',
   BACKEND_API_URL: 'https://www.formnotifyforslack.com',
   MAX_PROPERTY_BYTES: 9000,
   KEYS: {
@@ -12,11 +12,15 @@ var FormAlertConfig = {
     DEBUG_LOGS: 'debugLogs',
     LAST_STATUS: 'lastStatus',
     FREE_CREDITS_USED: 'freeCreditsUsed',
+    FREE_TRIAL_EXPIRES_AT: 'freeTrialExpiresAt',
+    FREE_SEND_LIMIT: 'freeSendLimit',
+    FREE_SEND_USED: 'freeSendUsed',
     TRIGGER_ERROR: 'triggerError',
     LICENSE_CODE: 'licenseCode',
     PLAN: 'plan',
     BILLING_CYCLE: 'billingCycle',
     PLAN_EXPIRES_AT: 'planExpiresAt',
+    PLAN_SYNCED_AT: 'planSyncedAt',
     BACKEND_API_URL: 'backendApiUrl'
   }
 };

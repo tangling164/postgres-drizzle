@@ -6,9 +6,9 @@ export const faqItems = [
   ['Can I move a License Code to another account?', 'Contact support with your payment email and order details. We can revoke the old License Code and issue a replacement after verifying the purchase.'],
   ['Do you store Google Form responses?', 'No. Response data is processed in your Google Apps Script environment and is not sent to FormAlert servers.'],
   ['Do you store my Slack Webhook URL?', 'No. The Webhook URL stays in user-scoped Apps Script PropertiesService for your connected Google Forms.'],
-  ['Does FormAlert support Slack Block Kit payloads?', 'Yes. Paste JSON from Slack Block Kit Builder into Payload Mode, insert Form question variables, validate it, and test with the latest response.'],
-  ['Which filter rules are supported?', 'The MVP supports equals, contains, and greater than. Rules run locally before a notification is sent to Slack.'],
-  ['What are the Free plan limits?', 'Free includes a 7-day trial, up to 30 Slack sends, one connected Google Form, Message Mode, one filter condition, and the latest 10 redacted local debug entries.'],
+  ['Does FormAlert support Slack Block Kit payloads?', 'Yes on Standard. Paste JSON from Slack Block Kit Builder into Payload Mode, insert Form question variables, validate it, and test with the latest response.'],
+  ['Which filter rules are supported?', 'Standard supports equals, contains, and greater than. Rules run locally before a notification is sent to Slack. Free does not include Filter Rules.'],
+  ['What are the Free plan limits?', 'Free is a one-time 7-day trial with up to 30 total Slack sends, one connected Google Form, Message Mode, no Filter Rules, and the latest 10 redacted local debug entries.'],
   ['How do refunds work?', 'Payments are non-refundable. You can cancel at any time and keep paid access until the end of the current billing period. Contact support for payment disputes or billing errors.'],
 ] as const
 

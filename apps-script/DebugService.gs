@@ -13,6 +13,7 @@ var DebugService = {
       'TEST_SENT',
       'SLACK_SENT',
       'PLAN_LIMIT',
+      'PLAN_SYNC_ERROR',
       'TRIGGER_SETUP_ERROR',
       'TRIGGER_SETUP_FAILED',
       'WEBHOOK_MISSING',
@@ -86,10 +87,13 @@ var DebugService = {
 
   getDebugInfo: function () {
     var triggerStatus = TriggerService.getStatus();
+    var usage = LicenseService.getUsage();
     return {
+      capturedAt: new Date().toISOString(),
       appVersion: FormAlertConfig.APP_VERSION,
       installationId: ConfigService.getInstallationId(),
-      plan: LicenseService.getUsage().plan,
+      plan: usage.plan,
+      planSyncedAt: usage.planSyncedAt,
       lastStatus: this.getLastStatus(),
       recentDebugLogs: this.getLogs(),
       triggerStatus: {
@@ -97,7 +101,8 @@ var DebugService = {
         state: triggerStatus.state,
         message: triggerStatus.message
       },
-      formCount: NotificationService.getAllRaw().length
+      formCount: NotificationService.getAllRaw().length,
+      standardReadiness: TriggerService.getReadinessSummary()
     };
   }
 };
