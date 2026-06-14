@@ -138,14 +138,18 @@ async function handlePaid(
 
   // Outside the transaction: a Resend failure throws → route answers 500 →
   // Creem retries → the retry path above rotates the code and resends.
-  await sendLicenseEmail({
+  const emailReceipt = await sendLicenseEmail({
     to: event.buyerEmail,
     licenseCode: result.code,
     plan: event.plan,
     billingCycle: event.billingCycle,
   })
   await sql`
-    UPDATE orders SET license_email_sent_at = now(), updated_at = now()
+    UPDATE orders
+    SET license_email_sent_at = now(),
+        license_email_id = ${emailReceipt.id},
+        license_email_status = 'sent',
+        updated_at = now()
     WHERE id = ${result.orderId}
   `
   return { note: 'order recorded, license generated, email sent' }

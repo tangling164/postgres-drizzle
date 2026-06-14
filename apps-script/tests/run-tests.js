@@ -102,6 +102,8 @@ const context = {
   },
   Utilities: {
     getUuid: () => `${String(++uuidCounter).padStart(8, '0')}-0000-0000-0000-000000000000`,
+    base64DecodeWebSafe: value => Buffer.from(value, 'base64url'),
+    newBlob: value => ({ getDataAsString: () => Buffer.from(value).toString('utf8') }),
   },
   LockService: {
     getDocumentLock: () => ({
@@ -132,12 +134,17 @@ const context = {
     getActiveUser: () => ({ getEmail: () => 'tester@example.com' }),
   },
   ScriptApp: {
+    AuthMode: { FULL: 'FULL' },
     EventType: {
       ON_FORM_SUBMIT: 'ON_FORM_SUBMIT',
       ON_EDIT: 'ON_EDIT',
     },
     getProjectTriggers: () => triggers,
-    getIdentityToken: () => 'test-identity-token',
+    requireAllScopes: () => {},
+    getIdentityToken: () => {
+      const payload = Buffer.from(JSON.stringify({ aud: 'test-audience' })).toString('base64url')
+      return `header.${payload}.signature`
+    },
     deleteTrigger: trigger => {
       const index = triggers.indexOf(trigger)
       if (index >= 0) triggers.splice(index, 1)
@@ -385,7 +392,7 @@ test('BackendService sends the identity token and LicenseService stores only rem
   equal(usage.plan, 'standard')
   equal(usage.maxForms, 20)
   equal(request.url, 'https://www.formnotifyforslack.com/v2/license/activate')
-  equal(request.options.headers.Authorization, 'Bearer test-identity-token')
+  equal(request.options.headers.Authorization.startsWith('Bearer header.'), true)
   equal(JSON.parse(request.options.payload).code, 'FA-S-ABCDE-FGHJK-MNPQR-STUVW')
   equal(userProperties.getProperty(context.FormAlertConfig.KEYS.LICENSE_CODE), null)
   equal(userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT), '2026-07-14T00:00:00.000Z')
@@ -397,6 +404,11 @@ test('BackendService sends the identity token and LicenseService stores only rem
     getContentText: () => JSON.stringify({ error: 'license_already_used' }),
   })
   throws(() => context.LicenseService.activate('FA-S-ABCDE-FGHJK-MNPQR-STUVW'), /already active on another Google account/)
+  context.UrlFetchApp.fetch = () => ({
+    getResponseCode: () => 401,
+    getContentText: () => JSON.stringify({ error: 'unauthorized' }),
+  })
+  throws(() => context.LicenseService.activate('FA-S-ABCDE-FGHJK-MNPQR-STUVW'), /Identity audience: test-audience/)
   context.UrlFetchApp.fetch = originalFetch
   setPlan('free')
 })

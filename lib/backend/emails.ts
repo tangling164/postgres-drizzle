@@ -13,6 +13,11 @@ interface SendEmailInput {
   to: string
   subject: string
   html: string
+  text: string
+}
+
+export interface EmailDeliveryReceipt {
+  id: string
 }
 
 export class EmailDeliveryError extends Error {
@@ -22,7 +27,12 @@ export class EmailDeliveryError extends Error {
   }
 }
 
-async function sendEmail({ to, subject, html }: SendEmailInput): Promise<void> {
+async function sendEmail({
+  to,
+  subject,
+  html,
+  text,
+}: SendEmailInput): Promise<EmailDeliveryReceipt> {
   const apiKey = process.env.RESEND_API_KEY
   const from = process.env.RESEND_FROM_EMAIL
   if (!apiKey || !from) {
@@ -34,7 +44,7 @@ async function sendEmail({ to, subject, html }: SendEmailInput): Promise<void> {
     }
     // Local dev without Resend: log instead of failing.
     console.warn(`[email:skipped] to=${to} subject="${subject}"`)
-    return
+    return { id: 'local-skipped' }
   }
 
   const response = await fetch(RESEND_API_URL, {
@@ -43,7 +53,14 @@ async function sendEmail({ to, subject, html }: SendEmailInput): Promise<void> {
       Authorization: `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ from: `FormAlert <${from}>`, to: [to], subject, html }),
+    body: JSON.stringify({
+      from: `FormAlert <${from}>`,
+      to: [to],
+      subject,
+      html,
+      text,
+      tags: [{ name: 'category', value: 'formalert_transactional' }],
+    }),
   })
 
   if (!response.ok) {
@@ -52,6 +69,11 @@ async function sendEmail({ to, subject, html }: SendEmailInput): Promise<void> {
       `Resend responded ${response.status}: ${detail.slice(0, 300)}`
     )
   }
+  const receipt = (await response.json()) as { id?: string }
+  if (!receipt.id) {
+    throw new EmailDeliveryError('Resend response did not include an email id')
+  }
+  return { id: receipt.id }
 }
 
 function supportEmail(): string {
@@ -90,9 +112,9 @@ export async function sendLicenseEmail(input: {
   licenseCode: string
   plan: string
   billingCycle: string
-}): Promise<void> {
+}): Promise<EmailDeliveryReceipt> {
   const planLabel = PLAN_LABELS[input.plan] ?? input.plan
-  await sendEmail({
+  return sendEmail({
     to: input.to,
     subject: `Your FormAlert ${planLabel} license code`,
     html: layout(`
@@ -104,8 +126,17 @@ export async function sendLicenseEmail(input: {
         <li>Go to <strong>Settings &rarr; License</strong>.</li>
         <li>Paste the code above and click <strong>Activate</strong>.</li>
       </ol>
-      <p style="font-size:14px;line-height:1.6;color:#475467;">Keep this email — the code is shown only here and can be activated on one Google account at a time.</p>
+      <p style="font-size:14px;line-height:1.6;color:#475467;">Keep this email - the code is shown only here and can be activated on one Google account at a time.</p>
     `),
+    text: `FormAlert ${planLabel} license code
+
+Thanks for purchasing the FormAlert ${planLabel} plan (${input.billingCycle}).
+
+License Code: ${input.licenseCode}
+
+Open your Google Form, launch FormAlert, paste the code in License, and click Activate.
+
+Keep this email. The code can be activated on one Google account at a time.`,
   })
 }
 
@@ -125,6 +156,7 @@ export async function sendCancellationScheduledEmail(input: {
       <p style="font-size:15px;line-height:1.6;">You keep full ${planLabel} access until <strong>${endDate}</strong>. After that date your account moves to the Free tier and notifications beyond the Free limits will pause.</p>
       <p style="font-size:15px;line-height:1.6;">Changed your mind? You can purchase a new plan at any time and reactivate with a new license code.</p>
     `),
+    text: `Your FormAlert ${planLabel} subscription has been cancelled. You keep paid access until ${endDate}.`,
   })
 }
 
@@ -147,6 +179,7 @@ export async function sendDowngradeExecutedEmail(input: {
       </ul>
       <p style="font-size:15px;line-height:1.6;"><a href="${siteUrl()}/pricing" style="color:#3056d3;font-weight:bold;">View plans &amp; reactivate</a></p>
     `),
+    text: `Your FormAlert ${planLabel} period has ended and your account is now on the Free tier.`,
   })
 }
 
@@ -163,5 +196,6 @@ export async function sendPaymentFailedEmail(input: {
       <p style="font-size:15px;line-height:1.6;">We could not process the renewal payment for your <strong>FormAlert ${planLabel}</strong> subscription.</p>
       <p style="font-size:15px;line-height:1.6;">Please update your payment method in the Creem customer portal (link in your original receipt email). If payment is not completed, your plan will downgrade to Free at the end of the current period.</p>
     `),
+    text: `We could not process the renewal payment for your FormAlert ${planLabel} subscription. Please update your payment method in the Creem customer portal.`,
   })
 }

@@ -1,10 +1,28 @@
 var BackendService = {
-  request: function (path, options) {
-    options = options || {};
+  getIdentityToken: function () {
+    ScriptApp.requireAllScopes(ScriptApp.AuthMode.FULL);
     var identityToken = ScriptApp.getIdentityToken();
     if (!identityToken) {
       throw new Error('Google authorization is required. Reopen FormAlert and approve the requested permissions.');
     }
+    return identityToken;
+  },
+
+  getIdentityAudience: function (identityToken) {
+    try {
+      var payload = String(identityToken || '').split('.')[1];
+      if (!payload) return null;
+      var decoded = Utilities.newBlob(Utilities.base64DecodeWebSafe(payload)).getDataAsString();
+      var audience = JSON.parse(decoded).aud;
+      return Array.isArray(audience) ? audience.join(',') : String(audience || '');
+    } catch (error) {
+      return null;
+    }
+  },
+
+  request: function (path, options) {
+    options = options || {};
+    var identityToken = this.getIdentityToken();
 
     var requestOptions = {
       method: options.method || 'get',
@@ -40,7 +58,7 @@ var BackendService = {
     }
 
     if (status >= 200 && status < 300) return body;
-    throw new Error(this.errorMessage(body && body.error, status));
+    throw new Error(this.errorMessage(body && body.error, status, identityToken));
   },
 
   activateLicense: function (licenseCode) {
@@ -59,9 +77,9 @@ var BackendService = {
     return this.request('/v2/account/plan');
   },
 
-  errorMessage: function (errorCode, status) {
+  errorMessage: function (errorCode, status, identityToken) {
     var messages = {
-      unauthorized: 'Google authorization expired. Reopen FormAlert and try again.',
+      unauthorized: 'Google authorization was rejected. Identity audience: ' + (this.getIdentityAudience(identityToken) || 'unavailable') + '.',
       license_not_found: 'License code is invalid. Check the code in your purchase email.',
       license_already_used: 'This license code is already active on another Google account.',
       license_revoked: 'This license code is no longer active. Contact support if you need help.',
