@@ -75,6 +75,14 @@ function normalizedPlan() {
   return plan
 }
 
+function normalizedCycle() {
+  const cycle = requireValue(args.cycle, '--cycle').toLowerCase()
+  if (cycle !== 'monthly' && cycle !== 'yearly') {
+    throw new Error('--cycle must be monthly or yearly')
+  }
+  return cycle
+}
+
 function databaseUrl() {
   const value =
     process.env.POSTGRES_URL_NON_POOLING ??
@@ -116,12 +124,12 @@ function redactEmail(email) {
   return `${local.slice(0, 2)}***@${domain}`
 }
 
-function statePath(plan) {
-  return join(repoRoot, 'temp', `m1-acceptance-${plan}.json`)
+function statePath(plan, cycle) {
+  return join(repoRoot, 'temp', `m1-acceptance-${plan}-${cycle}.json`)
 }
 
-function reportPath(plan) {
-  return join(repoRoot, 'temp', `m1-acceptance-${plan}-report.json`)
+function reportPath(plan, cycle) {
+  return join(repoRoot, 'temp', `m1-acceptance-${plan}-${cycle}-report.json`)
 }
 
 function writeJson(path, value) {
@@ -133,14 +141,22 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-function checkoutUrl(plan) {
-  const key =
-    plan === 'standard'
-      ? 'NEXT_PUBLIC_CREEM_STANDARD_MONTHLY_URL'
-      : 'NEXT_PUBLIC_CREEM_BUSINESS_MONTHLY_URL'
+function checkoutUrl(plan, cycle) {
+  const key = `NEXT_PUBLIC_CREEM_${plan.toUpperCase()}_${cycle.toUpperCase()}_URL`
   const value = process.env[key]
   if (!value) throw new Error(`${key} is not configured`)
   return value
+}
+
+function assertPaidPeriod(cycle, validUntil) {
+  const daysRemaining =
+    (new Date(validUntil).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+  const [minimum, maximum] = cycle === 'yearly' ? [300, 400] : [20, 45]
+  assert(
+    daysRemaining >= minimum && daysRemaining <= maximum,
+    `${cycle} paid period has ${daysRemaining.toFixed(1)} days remaining, expected ${minimum}-${maximum}`
+  )
+  return Number(daysRemaining.toFixed(1))
 }
 
 async function preflight() {
@@ -180,8 +196,10 @@ async function preflight() {
     assert(legacyBody.usable === false, 'STANDARD-TEST is still usable')
 
     console.log('M1 preflight passed.')
-    console.log(`Standard Test checkout: ${checkoutUrl('standard')}`)
-    console.log(`Business Test checkout: ${checkoutUrl('business')}`)
+    console.log(`Standard Monthly Test checkout: ${checkoutUrl('standard', 'monthly')}`)
+    console.log(`Standard Yearly Test checkout: ${checkoutUrl('standard', 'yearly')}`)
+    console.log(`Business Monthly Test checkout: ${checkoutUrl('business', 'monthly')}`)
+    console.log(`Business Yearly Test checkout: ${checkoutUrl('business', 'yearly')}`)
     console.log(`Retired pre-cutover licenses: ${JSON.stringify(legacy)}`)
   } finally {
     await sql.end({ timeout: 5 })
@@ -190,6 +208,7 @@ async function preflight() {
 
 async function observePurchase() {
   const plan = normalizedPlan()
+  const cycle = normalizedCycle()
   const email = requireValue(args.email, '--email').toLowerCase()
   const sql = postgres(databaseUrl(), {
     ssl: 'require',
@@ -205,11 +224,13 @@ async function observePurchase() {
              l.id AS license_id, l.status AS license_status, l.valid_until
       FROM orders o
       JOIN licenses l ON l.order_id = o.id
-      WHERE lower(o.buyer_email) = ${email} AND o.plan = ${plan}
+      WHERE lower(o.buyer_email) = ${email}
+        AND o.plan = ${plan}
+        AND o.billing_cycle = ${cycle}
       ORDER BY o.created_at DESC
       LIMIT 1
     `
-    assert(rows.length === 1, `No ${plan} purchase found for ${redactEmail(email)}`)
+    assert(rows.length === 1, `No ${plan} ${cycle} purchase found for ${redactEmail(email)}`)
     const purchase = rows[0]
     assert(purchase.order_status === 'completed', 'Order is not completed')
     assert(purchase.license_email_sent_at, 'License email has not been sent')
@@ -227,9 +248,11 @@ async function observePurchase() {
       purchase.license_status === 'pending',
       `License status is ${purchase.license_status}, expected pending before activation`
     )
+    const paidPeriodDaysRemaining = assertPaidPeriod(cycle, purchase.valid_until)
     const state = {
       status: 'purchase_observed',
       plan,
+      billingCycle: cycle,
       buyer: redactEmail(email),
       orderId: purchase.creem_order_id,
       internalOrderId: purchase.order_id,
@@ -239,11 +262,12 @@ async function observePurchase() {
       emailSentAt: purchase.license_email_sent_at,
       emailProviderStatus: delivery.last_event,
       validUntil: purchase.valid_until,
+      paidPeriodDaysRemaining,
       observedAt: new Date().toISOString(),
     }
-    writeJson(statePath(plan), state)
+    writeJson(statePath(plan, cycle), state)
     console.log(JSON.stringify(state, null, 2))
-    console.log(`Snapshot written: ${statePath(plan)}`)
+    console.log(`Snapshot written: ${statePath(plan, cycle)}`)
   } finally {
     await sql.end({ timeout: 5 })
   }
@@ -261,6 +285,7 @@ function paidFeatureContract(plan) {
 
 async function verifyActivatedPurchase() {
   const plan = normalizedPlan()
+  const cycle = normalizedCycle()
   const email = requireValue(args.email, '--email').toLowerCase()
   const code = requireValue(args.code ?? process.env.M1_LICENSE_CODE, '--code or M1_LICENSE_CODE')
     .toUpperCase()
@@ -282,7 +307,7 @@ async function verifyActivatedPurchase() {
     const beforeRows = await sql`
       SELECT l.id AS license_id, l.plan, l.status AS license_status,
              l.valid_until, l.activated_account_id,
-             o.creem_order_id, o.status AS order_status, o.buyer_email,
+             o.creem_order_id, o.status AS order_status, o.buyer_email, o.billing_cycle,
              o.license_email_sent_at, o.license_email_id, o.license_email_status
       FROM licenses l
       JOIN orders o ON o.id = l.order_id
@@ -293,6 +318,10 @@ async function verifyActivatedPurchase() {
     const before = beforeRows[0]
     assert(before.plan === plan, `Database license plan is ${before.plan}, expected ${plan}`)
     assert(
+      before.billing_cycle === cycle,
+      `Database billing cycle is ${before.billing_cycle}, expected ${cycle}`
+    )
+    assert(
       String(before.buyer_email).toLowerCase() === email,
       'Purchase email does not match --email'
     )
@@ -301,10 +330,14 @@ async function verifyActivatedPurchase() {
     assert(before.license_email_id, 'Resend email ID is missing')
     const delivery = await retrieveResendEmail(before.license_email_id)
     assert(delivery.last_event === 'delivered', `Resend final event is ${delivery.last_event}`)
-    assert(existsSync(statePath(plan)), `Run observe before activating the ${plan} License Code`)
-    const snapshot = JSON.parse(readFileSync(statePath(plan), 'utf8'))
+    assert(
+      existsSync(statePath(plan, cycle)),
+      `Run observe before activating the ${plan} ${cycle} License Code`
+    )
+    const snapshot = JSON.parse(readFileSync(statePath(plan, cycle), 'utf8'))
     assert(snapshot.licenseId === before.license_id, 'Observed purchase and supplied License Code do not match')
     assert(snapshot.licenseStatus === 'pending', 'Observed snapshot was not captured before activation')
+    assert(snapshot.billingCycle === cycle, 'Observed snapshot billing cycle does not match')
 
     const afterRows = await sql`
       SELECT l.id AS license_id, l.plan, l.status AS license_status,
@@ -331,25 +364,38 @@ async function verifyActivatedPurchase() {
       'License and account expiry do not match'
     )
     const features = paidFeatureContract(plan)
-    let supersededStandardCount = 0
-    if (plan === 'business' && args['expect-upgrade']) {
-      const [upgrade] = await sql`
+    const expectedSupersededPlan = args['expect-upgrade']
+      ? 'standard'
+      : args['expect-superseded']
+        ? requireValue(args['expect-superseded'], '--expect-superseded').toLowerCase()
+        : null
+    assert(
+      !expectedSupersededPlan ||
+        expectedSupersededPlan === 'standard' ||
+        expectedSupersededPlan === 'business',
+      '--expect-superseded must be standard or business'
+    )
+    let supersededLicenseCount = 0
+    if (expectedSupersededPlan) {
+      const [replacement] = await sql`
         SELECT count(*)::int AS count
         FROM licenses
         WHERE activated_account_id = ${after.activated_account_id}
-          AND plan = 'standard'
+          AND plan = ${expectedSupersededPlan}
           AND status = 'superseded'
       `
-      supersededStandardCount = upgrade.count
+      supersededLicenseCount = replacement.count
       assert(
-        supersededStandardCount >= 1,
-        'Business activation did not supersede the previous Standard license'
+        supersededLicenseCount >= 1,
+        `${plan} ${cycle} activation did not supersede the previous ${expectedSupersededPlan} license`
       )
     }
+    const paidPeriodDaysRemaining = assertPaidPeriod(cycle, after.valid_until)
 
     const report = {
       status: 'm1_paid_loop_passed',
       plan,
+      billingCycle: cycle,
       buyer: redactEmail(email),
       orderId: before.creem_order_id,
       observedLicenseStatus: snapshot.licenseStatus,
@@ -357,8 +403,10 @@ async function verifyActivatedPurchase() {
       accountPlan: after.account_plan,
       entitlementStatus: after.entitlement_status,
       activeLicenseCount: after.active_license_count,
-      supersededStandardCount,
+      expectedSupersededPlan,
+      supersededLicenseCount,
       validUntil: after.valid_until,
+      paidPeriodDaysRemaining,
       emailProviderStatus: delivery.last_event,
       paidFeatureContract: features,
       verifiedAt: new Date().toISOString(),
@@ -369,12 +417,13 @@ async function verifyActivatedPurchase() {
         'License transitioned from pending to active after real add-on activation',
         'Database entitlement and active license agree',
         'Exactly one active license remains on the Google account',
+        'Billing cycle maps to the expected paid period',
         'Purchased plan maps to the expected paid feature contract',
       ],
     }
-    writeJson(reportPath(plan), report)
+    writeJson(reportPath(plan, cycle), report)
     console.log(JSON.stringify(report, null, 2))
-    console.log(`Evidence written: ${reportPath(plan)}`)
+    console.log(`Evidence written: ${reportPath(plan, cycle)}`)
   } finally {
     await sql.end({ timeout: 5 })
   }
@@ -383,8 +432,8 @@ async function verifyActivatedPurchase() {
 function printHelp() {
   console.log(`Usage:
   pnpm test:m1 -- preflight
-  pnpm test:m1 -- observe --plan standard|business --email buyer@example.com
-  pnpm test:m1 -- verify --plan standard|business --email buyer@example.com --code <EMAIL_CODE>
+  pnpm test:m1 -- observe --plan standard|business --cycle monthly|yearly --email buyer@example.com
+  pnpm test:m1 -- verify --plan standard|business --cycle monthly|yearly --email buyer@example.com --code <EMAIL_CODE> [--expect-superseded standard|business]
 
 Run observe before pasting the code into the add-on. After activation, run verify.
 The verify command never prints or stores the License Code.`)

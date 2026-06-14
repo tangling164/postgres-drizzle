@@ -13,6 +13,8 @@ real Apps Script Google OIDC identity.
 - Pending-to-active transition after real Apps Script OIDC activation
 - Paid feature-contract assertions
 - Database license, account, expiry, and single-active-license assertions
+- SKU-specific monthly/yearly paid-period assertions
+- Same-tier replacement and Standard-to-Business upgrade assertions
 
 The License Code is never printed or written to disk.
 
@@ -22,11 +24,11 @@ The License Code is never printed or written to disk.
 pnpm test:m1 -- preflight
 ```
 
-Complete the Standard Test checkout using the URL printed by preflight. After
-the email arrives:
+Each SKU uses a separate snapshot and evidence report. Complete the checkout
+using the matching URL printed by preflight. After the email arrives:
 
 ```powershell
-pnpm test:m1 -- observe --plan standard --email buyer@example.com
+pnpm test:m1 -- observe --plan standard --cycle yearly --email buyer@example.com
 ```
 
 Paste the same code into FormAlert and activate it. Activate it a second time
@@ -34,26 +36,37 @@ to manually confirm same-account idempotency, then run:
 
 ```powershell
 $env:M1_LICENSE_CODE = "<same code from email>"
-pnpm test:m1 -- verify --plan standard --email buyer@example.com
+pnpm test:m1 -- verify --plan standard --cycle yearly --email buyer@example.com --expect-superseded standard
 Remove-Item Env:M1_LICENSE_CODE
 ```
 
-Repeat with the Business Test checkout:
+Continue with Business Monthly:
 
 ```powershell
-pnpm test:m1 -- observe --plan business --email buyer@example.com
+pnpm test:m1 -- observe --plan business --cycle monthly --email buyer@example.com
 ```
 
 Activate the Business code inside FormAlert, then run:
 
 ```powershell
 $env:M1_LICENSE_CODE = "<same code from email>"
-pnpm test:m1 -- verify --plan business --email buyer@example.com --expect-upgrade
+pnpm test:m1 -- verify --plan business --cycle monthly --email buyer@example.com --expect-superseded standard
 Remove-Item Env:M1_LICENSE_CODE
 ```
 
-Standard should activate with 20 connected Forms. Business should upgrade the
-same account to 100 connected Forms and supersede its previous active license.
+Finish with Business Yearly:
+
+```powershell
+pnpm test:m1 -- observe --plan business --cycle yearly --email buyer@example.com
+$env:M1_LICENSE_CODE = "<same code from email>"
+pnpm test:m1 -- verify --plan business --cycle yearly --email buyer@example.com --expect-superseded business
+Remove-Item Env:M1_LICENSE_CODE
+```
+
+The intended sequence is Standard Yearly, Business Monthly, then Business
+Yearly. Every activation must leave exactly one active license. Standard
+Yearly replaces Standard Monthly, Business Monthly upgrades Standard to
+Business, and Business Yearly replaces Business Monthly.
 
 ## Human Steps
 
