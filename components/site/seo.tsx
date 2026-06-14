@@ -16,7 +16,6 @@ export function SoftwareApplicationJsonLd() {
       offers: [
         { '@type': 'Offer', price: '0', priceCurrency: 'USD', name: 'Free' },
         { '@type': 'Offer', price: '5', priceCurrency: 'USD', name: 'Standard monthly' },
-        { '@type': 'Offer', price: '8', priceCurrency: 'USD', name: 'Business monthly' },
       ],
     }} />
   )

@@ -14,6 +14,7 @@ interface PricingPlan {
   description: string
   features: readonly string[]
   featured?: boolean
+  comingSoon?: boolean
 }
 
 const plans: readonly PricingPlan[] = [
@@ -41,12 +42,12 @@ const plans: readonly PricingPlan[] = [
     payment: '$79 billed yearly',
     description: 'For teams running FormAlert across many workflows.',
     features: ['Unlimited Slack sends', 'Up to 100 connected Google Forms', 'Message & Payload Mode', 'Unlimited conditions per Form*', 'Latest 10 redacted debug entries', 'Priority support'],
+    comingSoon: true,
   },
 ] as const
 
 function checkoutUrl(name: string, cycle: BillingCycle) {
   if (name === 'Standard') return cycle === 'monthly' ? siteConfig.checkout.standardMonthly : siteConfig.checkout.standardYearly
-  if (name === 'Business') return cycle === 'monthly' ? siteConfig.checkout.businessMonthly : siteConfig.checkout.businessYearly
   return siteConfig.marketplaceUrl
 }
 
@@ -67,14 +68,19 @@ export function PricingTable() {
         {plans.map((plan) => (
           <article className={`pricing-card ${plan.featured ? 'featured' : ''}`} key={plan.name}>
             {plan.featured && <span className="popular">Most popular</span>}
+            {plan.comingSoon && <span className="availability">Coming soon</span>}
             <h3>{plan.name}</h3>
             <p>{plan.description}</p>
             <div className="plan-price"><strong>{cycle === 'monthly' ? plan.monthly : plan.yearly}</strong><span>/ month</span></div>
             <small>{cycle === 'yearly' ? plan.payment : plan.name === 'Free' ? plan.payment : 'Billed monthly'}</small>
             <ul>{plan.features.map((feature) => <li key={feature}><Check weight="bold" />{feature}</li>)}</ul>
-            <a className={`button ${plan.featured ? 'button-primary' : 'button-secondary'}`} href={checkoutUrl(plan.name, cycle)}>
-              {plan.name === 'Free' ? 'Get FormAlert App' : `Choose ${plan.name}`}
-            </a>
+            {plan.comingSoon
+              ? <span className="button button-secondary button-unavailable" aria-disabled="true">Coming soon</span>
+              : (
+                <a className={`button ${plan.featured ? 'button-primary' : 'button-secondary'}`} href={checkoutUrl(plan.name, cycle)}>
+                  {plan.name === 'Free' ? 'Get FormAlert App' : `Choose ${plan.name}`}
+                </a>
+              )}
           </article>
         ))}
       </div>

@@ -73,11 +73,13 @@ export async function POST(request: NextRequest) {
 
   const outcome = await sql.begin(async (tx) => {
     const licenses = await tx`
-      SELECT id, plan, status, activated_account_id, valid_until
-      FROM licenses
-      WHERE code_hash = ${codeHash}
+      SELECT l.id, l.plan, l.status, l.activated_account_id, l.valid_until,
+        o.billing_cycle
+      FROM licenses l
+      JOIN orders o ON o.id = l.order_id
+      WHERE l.code_hash = ${codeHash}
       LIMIT 1
-      FOR UPDATE
+      FOR UPDATE OF l
     `
     const licenseRow = licenses[0]
 
@@ -125,6 +127,7 @@ export async function POST(request: NextRequest) {
         kind: 'done' as const,
         status: 'already_active',
         plan: licenseRow.plan as string,
+        billingCycle: licenseRow.billing_cycle as string,
         validUntil: licenseRow.valid_until as Date,
       }
     }
@@ -155,6 +158,7 @@ export async function POST(request: NextRequest) {
       kind: 'done' as const,
       status: 'activated',
       plan: decision.plan as string,
+      billingCycle: licenseRow.billing_cycle as string,
       validUntil: decision.validUntil,
     }
   })
@@ -170,6 +174,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     status: outcome.status,
     plan: outcome.plan,
+    billing_cycle: outcome.billingCycle,
     valid_until: outcome.validUntil.toISOString(),
     features: planFeatures(outcome.plan as 'standard' | 'business'),
     auto_resumed_forms: [],

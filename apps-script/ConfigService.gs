@@ -1,5 +1,5 @@
 var FormAlertConfig = {
-  APP_VERSION: '1.7.1-oidc-diagnostic',
+  APP_VERSION: '1.7.2-plan-cycle',
   BACKEND_API_URL: 'https://www.formnotifyforslack.com',
   MAX_PROPERTY_BYTES: 9000,
   KEYS: {
@@ -15,6 +15,7 @@ var FormAlertConfig = {
     TRIGGER_ERROR: 'triggerError',
     LICENSE_CODE: 'licenseCode',
     PLAN: 'plan',
+    BILLING_CYCLE: 'billingCycle',
     PLAN_EXPIRES_AT: 'planExpiresAt',
     BACKEND_API_URL: 'backendApiUrl'
   }

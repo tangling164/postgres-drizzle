@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
 
   return NextResponse.json({
     plan: effectivePlan,
+    billing_cycle: entitlement.billingCycle,
     reason: entitlement.reason,
     valid_until: entitlement.planExpiresAt?.toISOString() ?? null,
     plan_limit: planLimit,

@@ -7,7 +7,7 @@
  * and must never grant paid features by itself.
  */
 import { getSql } from '@/lib/db/client'
-import { EffectivePlan, isPaidPlan } from '@/lib/backend/plans'
+import { BillingCycle, EffectivePlan, isPaidPlan } from '@/lib/backend/plans'
 
 export type EntitlementReason =
   | 'paid_active'
@@ -20,6 +20,7 @@ export interface EntitlementResult {
   effectivePlan: EffectivePlan
   reason: EntitlementReason
   planExpiresAt: Date | null
+  billingCycle: BillingCycle | null
   trial: {
     expiresAt: Date
     sendLimit: number
@@ -35,7 +36,11 @@ export interface EntitlementInput {
     entitlementStatus: string
   }
   /** The account's license row with status='active', if any. */
-  activeLicense: { plan: string; validUntil: Date | null } | null
+  activeLicense: {
+    plan: string
+    validUntil: Date | null
+    billingCycle: BillingCycle
+  } | null
   trial: {
     expiresAt: Date
     sendLimit: number
@@ -66,6 +71,7 @@ export function resolveEntitlementFrom(
       effectivePlan: account.plan,
       reason: 'paid_active',
       planExpiresAt: account.planExpiresAt,
+      billingCycle: activeLicense.billingCycle,
       trial,
     }
   }
@@ -75,6 +81,7 @@ export function resolveEntitlementFrom(
       effectivePlan: 'none',
       reason: 'no_entitlement',
       planExpiresAt: null,
+      billingCycle: null,
       trial: null,
     }
   }
@@ -86,6 +93,7 @@ export function resolveEntitlementFrom(
       effectivePlan: 'none',
       reason: 'free_trial_exhausted',
       planExpiresAt: null,
+      billingCycle: null,
       trial,
     }
   }
@@ -97,6 +105,7 @@ export function resolveEntitlementFrom(
       effectivePlan: 'none',
       reason: 'free_trial_expired',
       planExpiresAt: null,
+      billingCycle: null,
       trial,
     }
   }
@@ -105,6 +114,7 @@ export function resolveEntitlementFrom(
     effectivePlan: 'free',
     reason: 'free_active',
     planExpiresAt: null,
+    billingCycle: null,
     trial,
   }
 }
@@ -121,6 +131,7 @@ export async function resolveEntitlement(
       a.entitlement_status,
       l.plan        AS license_plan,
       l.valid_until AS license_valid_until,
+      o.billing_cycle AS license_billing_cycle,
       t.expires_at  AS trial_expires_at,
       t.send_limit  AS trial_send_limit,
       t.send_used   AS trial_send_used,
@@ -128,6 +139,7 @@ export async function resolveEntitlement(
     FROM accounts a
     LEFT JOIN licenses l
       ON l.activated_account_id = a.id AND l.status = 'active'
+    LEFT JOIN orders o ON o.id = l.order_id
     LEFT JOIN free_trials t ON t.account_id = a.id
     WHERE a.id = ${accountId} AND a.status = 'active'
     LIMIT 1
@@ -142,7 +154,11 @@ export async function resolveEntitlement(
       entitlementStatus: row.entitlement_status,
     },
     activeLicense: row.license_plan
-      ? { plan: row.license_plan, validUntil: row.license_valid_until }
+      ? {
+          plan: row.license_plan,
+          validUntil: row.license_valid_until,
+          billingCycle: row.license_billing_cycle,
+        }
       : null,
     trial: row.trial_expires_at
       ? {

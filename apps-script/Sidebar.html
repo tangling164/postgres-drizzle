@@ -304,7 +304,7 @@
         '<div class="stack">' +
           '<section class="section">' +
             '<div class="meta">Logged in as</div><div class="value">' + escapeHtml(data.userEmail) + '</div>' +
-            '<div class="plan-line"><span><span class="meta">Plan</span><br><strong>' + escapeHtml(usage.label) + '</strong></span><span class="form-usage">' + data.formCount + ' / ' + usage.maxForms + ' Forms</span></div>' +
+            '<div class="plan-line"><span><span class="meta">Plan</span><br><strong>' + escapeHtml(usage.displayLabel || usage.label) + '</strong></span><span class="form-usage">' + data.formCount + ' / ' + usage.maxForms + ' Forms</span></div>' +
           '</section>' +
           setup +
           planWarning +
@@ -685,7 +685,7 @@
       var input = document.getElementById('license-code');
       try {
         var usage = await server('activateLicenseApi', input.value);
-        await loadMain(usage.label + ' plan activated.', 'success');
+        await loadMain((usage.displayLabel || usage.label) + ' plan activated.', 'success');
       } catch (error) {
         showFlash(error.message, 'error');
       }

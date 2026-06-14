@@ -194,6 +194,7 @@ for (const file of serviceFiles) {
 
 context.BackendService.getPlan = () => ({
   plan: context.LicenseService.getPlan().plan,
+  billing_cycle: userProperties.getProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE),
   valid_until: userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
 })
 
@@ -229,8 +230,10 @@ function throws(fn, pattern) {
   assertions += 1
   assert.throws(fn, pattern)
 }
-function setPlan(plan) {
+function setPlan(plan, billingCycle) {
   userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN, plan)
+  if (billingCycle) userProperties.setProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE, billingCycle)
+  else userProperties.deleteProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE)
   return context.LicenseService.getUsage()
 }
 
@@ -381,6 +384,7 @@ test('BackendService sends the identity token and LicenseService stores only rem
       getContentText: () => JSON.stringify({
         status: 'activated',
         plan: 'standard',
+        billing_cycle: 'monthly',
         valid_until: '2026-07-14T00:00:00.000Z',
       }),
     }
@@ -393,13 +397,17 @@ test('BackendService sends the identity token and LicenseService stores only rem
   const usage = context.LicenseService.activate('FA-S-ABCDE-FGHJK-MNPQR-STUVW')
   equal(fetchCount, 1)
   equal(usage.plan, 'standard')
+  equal(usage.billingCycle, 'monthly')
+  equal(usage.displayLabel, 'Standard / Monthly')
   equal(usage.maxForms, 20)
   equal(request.url, 'https://www.formnotifyforslack.com/v2/license/activate')
   equal(request.options.headers.Authorization.startsWith('Bearer header.'), true)
   equal(JSON.parse(request.options.payload).code, 'FA-S-ABCDE-FGHJK-MNPQR-STUVW')
   equal(userProperties.getProperty(context.FormAlertConfig.KEYS.LICENSE_CODE), null)
+  equal(userProperties.getProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE), 'monthly')
   equal(userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT), '2026-07-14T00:00:00.000Z')
   equal(context.LicenseService.applyRemotePlan({ plan: 'none', valid_until: null }).plan, 'none')
+  equal(userProperties.getProperty(context.FormAlertConfig.KEYS.BILLING_CYCLE), null)
   throws(() => context.LicenseService.reserveSendCredit(), /Free trial has ended/)
 
   context.UrlFetchApp.fetch = () => ({
@@ -552,7 +560,7 @@ test('Connected Forms supports unique form IDs, title search, and ten-item pagin
   equal(context.getSidebarBootstrap().notifications.length, 3)
   equal(context.getSidebarBootstrap().userEmail, 'tester@example.com')
   equal(context.getSidebarBootstrap().formCount, 11)
-  equal(context.getSidebarBootstrap().appVersion, '1.7.1-oidc-diagnostic')
+  equal(context.getSidebarBootstrap().appVersion, '1.7.2-plan-cycle')
 })
 
 test('Business allows 100 connected Forms and paused Forms still count toward the limit', () => {
@@ -993,6 +1001,7 @@ test('Sidebar source preserves the v1.6 refined UI interaction contracts', () =>
   ok(sidebar.includes('Plugin error logs'))
   equal(sidebar.includes('查看插件错误日志'), false)
   equal(sidebar.includes('Unlimited alerts'), false)
+  ok(sidebar.includes('usage.displayLabel || usage.label'))
   ok(sidebar.includes('getDebugPanelApi'))
   ok(sidebar.includes('conditions.slice((state.filterPage - 1) * 5'))
   ok(sidebar.includes("var delay = kind === 'error' ? 8000 : kind === 'warning' ? 5000 : 3000"))

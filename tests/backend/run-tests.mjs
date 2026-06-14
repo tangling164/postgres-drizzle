@@ -246,13 +246,14 @@ test('paid plan with matching active license → paid_active', () => {
   const result = entitlement.resolveEntitlementFrom(
     {
       account: { plan: 'standard', planExpiresAt: FUTURE, entitlementStatus: 'active' },
-      activeLicense: { plan: 'standard', validUntil: FUTURE },
+      activeLicense: { plan: 'standard', validUntil: FUTURE, billingCycle: 'yearly' },
       trial: activeTrial,
     },
     NOW
   )
   assert.equal(result.effectivePlan, 'standard')
   assert.equal(result.reason, 'paid_active')
+  assert.equal(result.billingCycle, 'yearly')
 })
 
 test('paid plan cache WITHOUT active license falls back to trial (P1-01)', () => {
@@ -272,7 +273,7 @@ test('revoked entitlement_status blocks paid access even with license row', () =
   const result = entitlement.resolveEntitlementFrom(
     {
       account: { plan: 'standard', planExpiresAt: FUTURE, entitlementStatus: 'revoked' },
-      activeLicense: { plan: 'standard', validUntil: FUTURE },
+      activeLicense: { plan: 'standard', validUntil: FUTURE, billingCycle: 'monthly' },
       trial: null,
     },
     NOW
@@ -284,7 +285,7 @@ test('expired paid period falls back to trial state', () => {
   const result = entitlement.resolveEntitlementFrom(
     {
       account: { plan: 'standard', planExpiresAt: PAST, entitlementStatus: 'active' },
-      activeLicense: { plan: 'standard', validUntil: PAST },
+      activeLicense: { plan: 'standard', validUntil: PAST, billingCycle: 'monthly' },
       trial: { ...activeTrial, expiresAt: PAST },
     },
     NOW

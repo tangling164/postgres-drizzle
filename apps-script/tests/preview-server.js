@@ -26,9 +26,9 @@ const mockScript = `
   };
   const handlers = {
     getSidebarBootstrap: () => ({
-      appVersion: '1.7.1-oidc-diagnostic',
+      appVersion: '1.7.2-plan-cycle',
       userEmail: 'user@example.com',
-      usage: { plan: 'business', label: 'Business', maxForms: 100, maxNotifications: 100, maxConditions: 50, allowsPayload: true, creditsTotal: null, creditsUsed: 0, creditsLeft: null },
+      usage: { plan: 'business', label: 'Business', displayLabel: 'Business / Yearly', billingCycle: 'yearly', maxForms: 100, maxNotifications: 100, maxConditions: 50, allowsPayload: true, creditsTotal: null, creditsUsed: 0, creditsLeft: null },
       planSyncWarning: null,
       identityDiagnostics: null,
       notifications: previewNotifications,
@@ -50,7 +50,7 @@ const mockScript = `
           { id: 'cond-2', enabled: true, fieldId: '13', fieldTitle: 'Priority', fieldType: 'text', operator: 'text_eq', value: 'High' }
         );
       }
-      return { fields: previewFields, usage: { plan: 'standard', label: 'Standard', maxForms: 20, maxNotifications: 20, maxConditions: 50, allowsPayload: true }, notification };
+      return { fields: previewFields, usage: { plan: 'standard', label: 'Standard', displayLabel: 'Standard / Monthly', billingCycle: 'monthly', maxForms: 20, maxNotifications: 20, maxConditions: 50, allowsPayload: true }, notification };
     },
     refreshFields: () => previewFields,
     validatePayloadApi: () => ({ valid: true, variables: ['Budget'], missingVariables: [] }),
@@ -60,7 +60,7 @@ const mockScript = `
     deleteNotificationApi: () => ({ ok: true }),
     setNotificationEnabledApi: () => ({ enabled: false }),
     fixSetupApi: () => ({ installed: true, state: 'enabled' }),
-    activateLicenseApi: () => ({ label: 'Standard' }),
+    activateLicenseApi: () => ({ label: 'Standard', displayLabel: 'Standard / Monthly' }),
     getDebugPanelApi: () => ({
       lastStatus: 'test',
       lastRun: '2026-06-10T08:00:00.000Z',

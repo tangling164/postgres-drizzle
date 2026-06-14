@@ -16,6 +16,7 @@ var LicenseService = {
   retireLegacyLocalLicense: function (properties) {
     if (!properties.getProperty(FormAlertConfig.KEYS.LICENSE_CODE)) return false;
     properties.deleteProperty(FormAlertConfig.KEYS.LICENSE_CODE);
+    properties.deleteProperty(FormAlertConfig.KEYS.BILLING_CYCLE);
     properties.deleteProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT);
     properties.setProperty(FormAlertConfig.KEYS.PLAN, 'free');
     return true;
@@ -36,6 +37,11 @@ var LicenseService = {
     var properties = ConfigService.userProperties();
     properties.setProperty(FormAlertConfig.KEYS.PLAN, plan);
     properties.deleteProperty(FormAlertConfig.KEYS.LICENSE_CODE);
+    if ((plan === 'standard' || plan === 'business') && result && (result.billing_cycle === 'monthly' || result.billing_cycle === 'yearly')) {
+      properties.setProperty(FormAlertConfig.KEYS.BILLING_CYCLE, result.billing_cycle);
+    } else {
+      properties.deleteProperty(FormAlertConfig.KEYS.BILLING_CYCLE);
+    }
     if (result && result.valid_until) {
       properties.setProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT, result.valid_until);
     } else {
@@ -52,9 +58,16 @@ var LicenseService = {
   getUsage: function () {
     var plan = this.getPlan();
     var used = this.getUsedCredits();
+    var billingCycle = ConfigService.userProperties().getProperty(FormAlertConfig.KEYS.BILLING_CYCLE);
+    var displayLabel = plan.label;
+    if ((plan.plan === 'standard' || plan.plan === 'business') && (billingCycle === 'monthly' || billingCycle === 'yearly')) {
+      displayLabel += ' / ' + billingCycle.charAt(0).toUpperCase() + billingCycle.slice(1);
+    }
     return {
       plan: plan.plan,
       label: plan.label,
+      displayLabel: displayLabel,
+      billingCycle: billingCycle,
       maxForms: plan.maxForms,
       maxNotifications: plan.maxNotifications,
       maxConditions: plan.maxConditions,
