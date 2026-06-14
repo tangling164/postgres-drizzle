@@ -1,4 +1,4 @@
-import { CheckCircle, ClipboardText, EnvelopeSimple, PuzzlePiece } from '@phosphor-icons/react/dist/ssr'
+import { CheckCircle, EnvelopeSimple, PuzzlePiece } from '@phosphor-icons/react/dist/ssr'
 import type { Metadata } from 'next'
 import { Callout, PageHero, PluginScreenshot, WorkflowSteps } from '@/components/site/content'
 import { ButtonLink } from '@/components/site/site-shell'
@@ -10,11 +10,10 @@ export default function CheckoutSuccessPage() {
   return (
     <main className="page-container narrow-section">
       <BreadcrumbJsonLd items={[{ name: 'Home', path: '/' }, { name: 'License Code Delivery', path: '/checkout/success' }]} />
-      <PageHero eyebrow="License delivery" title="Your License Code unlocks the paid plan inside FormAlert." description="After a successful Creem checkout, the License Code appears on the success page and is sent to the payment email." align="center" />
-      <Callout title="Checkout integration placeholder" kind="info">The frontend currently demonstrates the delivery flow. A real License Code will be inserted here after the Creem webhook and license service are implemented.</Callout>
-      <div className="license-code"><ClipboardText weight="fill" /><div><small>Example License Code</small><strong>FA-8K2L-93JD-PRO</strong></div></div>
+      <PageHero eyebrow="License delivery" title="Check your email for your License Code." description="After a successful Creem checkout, FormAlert sends the License Code to the payment email. It is not displayed or stored on this page." align="center" />
+      <Callout title="Email can take a few minutes" kind="info">Check your spam or junk folder if the License Code email does not arrive. Contact Support with your payment email and order details if you still need help.</Callout>
       <WorkflowSteps items={[
-        { title: 'Copy the License Code', text: 'Copy it from the payment success page or delivery email.' },
+        { title: 'Open the delivery email', text: 'Copy the License Code sent to the email used during Creem checkout.' },
         { title: 'Open FormAlert', text: 'Return to the Google Form and open the add-on from the Forms editor.' },
         { title: 'Open License', text: 'Paste the code into the License section.' },
         { title: 'Activate your plan', text: 'The add-on verifies the code and applies your plan limits.' },

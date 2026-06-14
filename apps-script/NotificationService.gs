@@ -4,7 +4,17 @@ var NotificationService = {
   },
 
   getIndex: function () {
-    var index = ConfigService.readJson(ConfigService.userProperties(), FormAlertConfig.KEYS.FORM_INDEX, []);
+    var properties = ConfigService.userProperties();
+    var stored = ConfigService.readJson(properties, FormAlertConfig.KEYS.FORM_INDEX, []);
+    var index = stored;
+    if (stored && stored.version === 2 && stored.chunks > 0) {
+      index = [];
+      for (var chunkIndex = 0; chunkIndex < stored.chunks; chunkIndex += 1) {
+        var chunk = ConfigService.readJson(properties, FormAlertConfig.KEYS.FORM_INDEX_CHUNK_PREFIX + chunkIndex, []);
+        if (!Array.isArray(chunk)) return [];
+        index = index.concat(chunk);
+      }
+    }
     if (!Array.isArray(index)) return [];
     var seen = {};
     return index.filter(function (entry) {
@@ -16,7 +26,34 @@ var NotificationService = {
   },
 
   writeIndex: function (index) {
-    return ConfigService.writeJson(ConfigService.userProperties(), FormAlertConfig.KEYS.FORM_INDEX, index);
+    var properties = ConfigService.userProperties();
+    var previous = ConfigService.readJson(properties, FormAlertConfig.KEYS.FORM_INDEX, null);
+    var previousChunkCount = previous && previous.version === 2 ? Number(previous.chunks) || 0 : 0;
+    var chunks = [];
+    var current = [];
+
+    index.forEach(function (entry) {
+      var candidate = current.concat([entry]);
+      if (current.length && ConfigService.utf8ByteLength(JSON.stringify(candidate)) > FormAlertConfig.MAX_PROPERTY_BYTES) {
+        chunks.push(current);
+        current = [entry];
+      } else {
+        current = candidate;
+      }
+    });
+    if (current.length) chunks.push(current);
+
+    chunks.forEach(function (chunk, chunkIndex) {
+      ConfigService.writeJson(properties, FormAlertConfig.KEYS.FORM_INDEX_CHUNK_PREFIX + chunkIndex, chunk);
+    });
+    for (var staleIndex = chunks.length; staleIndex < previousChunkCount; staleIndex += 1) {
+      properties.deleteProperty(FormAlertConfig.KEYS.FORM_INDEX_CHUNK_PREFIX + staleIndex);
+    }
+    ConfigService.writeJson(properties, FormAlertConfig.KEYS.FORM_INDEX, {
+      version: 2,
+      chunks: chunks.length
+    });
+    return index;
   },
 
   readFormConfig: function (formId) {
@@ -151,7 +188,7 @@ var NotificationService = {
       if (input.id && (!existing || existing.id !== input.id)) {
         throw new Error('This Form alert does not belong to the current Google Form.');
       }
-      LicenseService.assertCanSave({ id: existing ? existing.id : null, filter: input.filter }, NotificationService.getAllRaw());
+      LicenseService.assertCanSave({ id: existing ? existing.id : null, messageType: input.messageType, filter: input.filter }, NotificationService.getAllRaw());
       var normalized = NotificationService.validateAndNormalize(input, existing);
       NotificationService.writeFormConfig(normalized);
       return normalized;

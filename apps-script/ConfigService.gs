@@ -1,18 +1,22 @@
 var FormAlertConfig = {
-  APP_VERSION: '1.6.0-forms-first',
+  APP_VERSION: '1.7.0-license-activation',
+  BACKEND_API_URL: 'https://www.formnotifyforslack.com',
   MAX_PROPERTY_BYTES: 9000,
   KEYS: {
     INSTALLATION_ID: 'installationId',
     NOTIFICATIONS: 'notifications',
     LEGACY_MIGRATED: 'legacyNotificationsMigrated',
     FORM_INDEX: 'formIndex',
+    FORM_INDEX_CHUNK_PREFIX: 'formIndexChunk.',
     FORM_CONFIG_PREFIX: 'formConfig.',
     DEBUG_LOGS: 'debugLogs',
     LAST_STATUS: 'lastStatus',
     FREE_CREDITS_USED: 'freeCreditsUsed',
     TRIGGER_ERROR: 'triggerError',
     LICENSE_CODE: 'licenseCode',
-    PLAN: 'plan'
+    PLAN: 'plan',
+    PLAN_EXPIRES_AT: 'planExpiresAt',
+    BACKEND_API_URL: 'backendApiUrl'
   }
 };
 
@@ -23,6 +27,15 @@ var ConfigService = {
 
   userProperties: function () {
     return PropertiesService.getUserProperties();
+  },
+
+  scriptProperties: function () {
+    return PropertiesService.getScriptProperties();
+  },
+
+  getBackendApiUrl: function () {
+    var configured = this.scriptProperties().getProperty(FormAlertConfig.KEYS.BACKEND_API_URL);
+    return String(configured || FormAlertConfig.BACKEND_API_URL).replace(/\/+$/, '');
   },
 
   readJson: function (properties, key, fallback) {

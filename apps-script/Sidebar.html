@@ -292,6 +292,9 @@
       var setup = data.currentFormConnected && data.triggerStatus.state === 'needs_setup'
         ? '<section class="section"><div class="row"><div><h2>Setup needs attention</h2><div class="meta">FormAlert could not finish setup.</div></div><button class="button button-danger button-small" onclick="fixSetup()">Fix setup</button></div></section>'
         : '';
+      var planWarning = data.planSyncWarning
+        ? '<section class="section"><div class="meta">Plan status could not be refreshed. Your last known plan is shown.</div></section>'
+        : '';
 
       document.getElementById('main').innerHTML =
         '<div class="stack">' +
@@ -300,6 +303,7 @@
             '<div class="plan-line"><span><span class="meta">Plan</span><br><strong>' + escapeHtml(usage.label) + '</strong></span><span class="form-usage">' + data.formCount + ' / ' + usage.maxForms + ' Forms</span></div>' +
           '</section>' +
           setup +
+          planWarning +
           '<section class="section">' +
             '<div class="row"><h2>Connected Forms</h2><button class="button button-primary button-small" ' + (addDisabled ? 'disabled' : '') + ' onclick="openEditor()">+ Add</button></div>' +
             (atFormLimit ? '<p class="inline-help">' + escapeHtml(usage.label) + ' supports up to ' + usage.maxForms + ' connected Google Forms.</p>' : '') +
@@ -307,7 +311,7 @@
             '<button class="button button-text button-wide" onclick="openAll()">View all Forms</button>' +
           '</section>' +
           '<section class="section">' +
-            '<div class="row"><h2>Plan & License</h2><a class="button button-secondary button-small" href="https://formalert.app/pricing" target="_blank">' + icon('upgrade') + 'Upgrade</a></div>' +
+            '<div class="row"><h2>Plan & License</h2><a class="button button-secondary button-small" href="https://www.formnotifyforslack.com/pricing" target="_blank">' + icon('upgrade') + 'Upgrade</a></div>' +
             '<div class="license-form"><input id="license-code" placeholder="License code"><button class="button button-secondary" onclick="activateLicense()">Activate</button></div>' +
           '</section>' +
           '<section class="section"><h2>Help</h2><div class="help-links">' +
@@ -401,6 +405,8 @@
         : '';
       var count = notification.filter.conditions.length;
       var filterSummary = count ? count + ' condition' + (count === 1 ? '' : 's') + ' configured' : 'No filters';
+      var payloadDisabled = state.usage.allowsPayload ? '' : ' disabled';
+      var filtersDisabled = state.usage.maxConditions === 0 && count === 0 ? ' disabled' : '';
 
       document.getElementById('main').innerHTML =
         '<div class="view-header"><h1>Configure Slack Alert</h1><button class="button button-text" onclick="loadMain()">Back</button></div>' +
@@ -411,17 +417,21 @@
           '<section class="section stack">' +
             '<div class="row"><h2>Add Form Field</h2><button class="button button-secondary button-small" onclick="reloadFields()">' + icon('refresh') + 'Refresh Fields</button></div>' +
             '<select id="field-picker" onchange="insertSelectedField(this.value)">' + fieldOptions('', true) + '</select>' +
-            '<div class="message-type-row"><div class="tabs"><button class="tab ' + (notification.messageType === 'message' ? 'active' : '') + '" aria-pressed="' + (notification.messageType === 'message') + '" onclick="setMessageType(\'message\')">Message</button><button class="tab ' + (notification.messageType === 'payload' ? 'active' : '') + '" aria-pressed="' + (notification.messageType === 'payload') + '" onclick="setMessageType(\'payload\')">Payload</button></div>' + payloadLink + '</div>' +
+            '<div class="message-type-row"><div class="tabs"><button class="tab ' + (notification.messageType === 'message' ? 'active' : '') + '" aria-pressed="' + (notification.messageType === 'message') + '" onclick="setMessageType(\'message\')">Message</button><button class="tab ' + (notification.messageType === 'payload' ? 'active' : '') + '" aria-pressed="' + (notification.messageType === 'payload') + '"' + payloadDisabled + ' onclick="setMessageType(\'payload\')">Payload</button></div>' + payloadLink + '</div>' +
             '<div class="field"><textarea id="editor-area" class="' + (notification.messageType === 'payload' ? 'payload' : '') + '" placeholder="Start writing your message here..." onfocus="rememberCursor(this)" onclick="rememberCursor(this)" onkeyup="rememberCursor(this)" onselect="rememberCursor(this)" oninput="updateTemplate(this.value,this)">' + escapeHtml(editorValue) + '</textarea></div>' +
             payloadValidation +
           '</section>' +
-          '<section class="section"><div class="row"><div><h2>Filters</h2><div class="meta">' + escapeHtml(filterSummary) + '</div></div><button class="button button-secondary button-small" onclick="openFilters()">Edit filters</button></div></section>' +
+          '<section class="section"><div class="row"><div><h2>Filters</h2><div class="meta">' + escapeHtml(filterSummary) + '</div></div><button class="button button-secondary button-small"' + filtersDisabled + ' onclick="openFilters()">Edit filters</button></div></section>' +
           '<div class="test-actions"><button class="button button-secondary" onclick="testEditor(\'quick\')">Send Test</button><button class="button button-secondary" onclick="testEditor(\'latest\')">Test latest response</button></div>' +
           '<button class="button button-primary button-wide" onclick="saveEditor()">Save</button>' +
         '</div>';
     }
 
     function setMessageType(type) {
+      if (type === 'payload' && !state.usage.allowsPayload) {
+        showFlash('Payload Mode requires a paid plan.', 'warning');
+        return;
+      }
       state.editor.messageType = type === 'payload' ? 'payload' : 'message';
       state.activeEditorType = null;
       renderEditor();
@@ -509,7 +519,7 @@
         '<div class="stack">' +
           '<section class="section stack">' + match + cards + '</section>' +
           '<button class="button button-primary button-wide" ' + (atLimit ? 'disabled' : '') + ' onclick="addCondition()">+ Add Filter</button>' +
-          (atLimit ? '<div class="meta">' + escapeHtml(state.usage.label) + ' allows up to ' + state.usage.maxConditions + ' filters.</div>' : '') +
+          (atLimit ? '<div class="meta">' + (state.usage.maxConditions === 0 ? 'Filters require a paid plan.' : escapeHtml(state.usage.label) + ' allows up to ' + state.usage.maxConditions + ' filters.') + '</div>' : '') +
           '<div class="pager"><span>Page ' + state.filterPage + ' / ' + totalPages + '</span><span>' +
             '<button class="button button-secondary button-small" ' + (state.filterPage <= 1 ? 'disabled' : '') + ' onclick="openFilters(' + (state.filterPage - 1) + ')">Prev</button> ' +
             '<button class="button button-secondary button-small" ' + (state.filterPage >= totalPages ? 'disabled' : '') + ' onclick="openFilters(' + (state.filterPage + 1) + ')">Next</button></span></div>' +

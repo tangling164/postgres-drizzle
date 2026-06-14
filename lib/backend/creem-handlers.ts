@@ -84,7 +84,7 @@ async function handlePaid(
 
   const result = await sql.begin(async (tx) => {
     const existing = await tx`
-      SELECT id, license_email_sent_at FROM orders
+      SELECT id, plan, license_email_sent_at FROM orders
       WHERE creem_order_id = ${event.orderId}
     `
 
@@ -95,7 +95,7 @@ async function handlePaid(
       }
       // Webhook retry after an email failure: rotate the pending code so the
       // user receives a working one (plaintext codes are never stored).
-      const code = generateLicenseCode()
+      const code = generateLicenseCode(order.plan)
       const rotated = await tx`
         UPDATE licenses
         SET code_hash = ${hashLicenseCode(code, licensePepper())}
@@ -121,7 +121,7 @@ async function handlePaid(
     `
     const orderId = insertedOrders[0].id as string
 
-    const code = generateLicenseCode()
+    const code = generateLicenseCode(event.plan)
     await tx`
       INSERT INTO licenses (code_hash, order_id, plan, status, valid_until, creem_subscription_id)
       VALUES (

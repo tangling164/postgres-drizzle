@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
 
-  const sql = getSql()
+  const sql = getSql({ transaction: true })
 
   // Hygiene: persist trial expiry (resolveEntitlement also derives this at
   // read time, so this is bookkeeping, not a correctness dependency).

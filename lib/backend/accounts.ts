@@ -34,7 +34,7 @@ export async function ensureAccount(
   googleSubject: string,
   email: string | null
 ): Promise<AccountRow> {
-  const sql = getSql()
+  const sql = getSql({ transaction: true })
 
   const existing = await sql`
     SELECT id, google_subject, email, plan, plan_expires_at, entitlement_status, status

@@ -68,6 +68,11 @@ var ExecutionService = {
   },
 
   runAll: function (responseMap, formId) {
+    try {
+      LicenseService.refreshUsage();
+    } catch (error) {
+      DebugService.write('error', null, { reasonCode: 'PLAN_SYNC_ERROR' });
+    }
     var notification = NotificationService.getByFormId(formId || FieldService.getFormId());
     if (!notification || !NotificationService.isEntitled(notification.id)) return [];
     if (notification.enabled === false) {

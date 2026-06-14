@@ -26,9 +26,9 @@ const mockScript = `
   };
   const handlers = {
     getSidebarBootstrap: () => ({
-      appVersion: '1.6.0-forms-first',
+      appVersion: '1.7.0-license-activation',
       userEmail: 'user@example.com',
-      usage: { plan: 'business', label: 'Business', maxForms: 20, maxNotifications: 20, maxConditions: 10, creditsTotal: null, creditsUsed: 0, creditsLeft: null },
+      usage: { plan: 'business', label: 'Business', maxForms: 100, maxNotifications: 100, maxConditions: 50, allowsPayload: true, creditsTotal: null, creditsUsed: 0, creditsLeft: null },
       notifications: previewNotifications,
       formCount: 3,
       currentFormId: 'form-1',
@@ -48,7 +48,7 @@ const mockScript = `
           { id: 'cond-2', enabled: true, fieldId: '13', fieldTitle: 'Priority', fieldType: 'text', operator: 'text_eq', value: 'High' }
         );
       }
-      return { fields: previewFields, usage: { plan: 'standard', label: 'Standard', maxForms: 10, maxNotifications: 10, maxConditions: 5 }, notification };
+      return { fields: previewFields, usage: { plan: 'standard', label: 'Standard', maxForms: 20, maxNotifications: 20, maxConditions: 50, allowsPayload: true }, notification };
     },
     refreshFields: () => previewFields,
     validatePayloadApi: () => ({ valid: true, variables: ['Budget'], missingVariables: [] }),
@@ -68,7 +68,7 @@ const mockScript = `
         { timestamp: '2026-06-10T07:00:00.000Z', status: 'paused', reasonCode: 'PAUSED' }
       ]
     }),
-    copyDebugInfoApi: () => '{"appVersion":"1.6.0-forms-first"}'
+    copyDebugInfoApi: () => '{"appVersion":"1.7.0-license-activation"}'
   };
   function runner(success, failure) {
     return new Proxy({}, {

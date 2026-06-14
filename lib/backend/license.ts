@@ -1,22 +1,24 @@
 /**
  * License code generation / hashing (Full_Backend_Spec v4.1 §4.3, §8.1).
  *
- * - Format: FA-XXXX-XXXX-XXXX-XXXX over an unambiguous charset
- *   (no 0/O/1/I/L) so users can read codes from email reliably.
+ * - Email-only format: FA-S-XXXXX-XXXXX-XXXXX-XXXXX (or FA-B for Business).
+ * - Legacy and local test codes are intentionally rejected.
+ * - The charset excludes 0/O/1/I/L so users can read codes from email reliably.
  * - Storage: only HMAC-SHA256(code, LICENSE_PEPPER) is persisted; the plain
  *   code exists exactly once, inside the license email.
  */
 import { createHmac, randomInt, timingSafeEqual } from 'node:crypto'
+import { PaidPlan } from '@/lib/backend/plans'
 
 export const LICENSE_CHARSET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
 const GROUPS = 4
-const GROUP_LENGTH = 4
+const GROUP_LENGTH = 5
 
 export const LICENSE_CODE_PATTERN = new RegExp(
-  `^FA(-[${LICENSE_CHARSET}]{${GROUP_LENGTH}}){${GROUPS}}$`
+  `^FA-[SB](-[${LICENSE_CHARSET}]{${GROUP_LENGTH}}){${GROUPS}}$`
 )
 
-export function generateLicenseCode(): string {
+export function generateLicenseCode(plan: PaidPlan): string {
   const groups: string[] = []
   for (let g = 0; g < GROUPS; g += 1) {
     let group = ''
@@ -25,7 +27,8 @@ export function generateLicenseCode(): string {
     }
     groups.push(group)
   }
-  return `FA-${groups.join('-')}`
+  const prefix = plan === 'business' ? 'FA-B' : 'FA-S'
+  return `${prefix}-${groups.join('-')}`
 }
 
 export function normalizeLicenseCode(input: string): string {

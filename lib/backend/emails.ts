@@ -72,7 +72,7 @@ function layout(body: string): string {
     <hr style="border:none;border-top:1px solid #e4e7ec;margin:32px 0 16px;" />
     <p style="font-size:12px;color:#667085;margin:0;">
       Need help? Contact <a href="mailto:${supportEmail()}" style="color:#3056d3;">${supportEmail()}</a>
-      &middot; <a href="${siteUrl()}" style="color:#3056d3;">formalert.app</a>
+      &middot; <a href="${siteUrl()}" style="color:#3056d3;">FormAlert website</a>
     </p>
   </div>
 </body>

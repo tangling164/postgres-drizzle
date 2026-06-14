@@ -28,12 +28,21 @@ function onFormSubmit(event) {
 
 function getSidebarBootstrap() {
   var migrationWarning = NotificationService.migrateCurrentFormLegacy();
+  var usage;
+  var planSyncWarning = null;
+  try {
+    usage = LicenseService.refreshUsage();
+  } catch (error) {
+    usage = LicenseService.getUsage();
+    planSyncWarning = error.message;
+  }
   var notifications = NotificationService.getPage('', 1, 3);
   var email = Session.getActiveUser().getEmail();
   return {
     appVersion: FormAlertConfig.APP_VERSION,
     userEmail: email || 'Current Google account',
-    usage: LicenseService.getUsage(),
+    usage: usage,
+    planSyncWarning: planSyncWarning,
     notifications: notifications.items,
     formCount: NotificationService.getAllRaw().length,
     currentFormId: FieldService.getFormId(),
@@ -115,7 +124,7 @@ function prepareTestNotification_(notification, enforcePlan) {
   var existing = NotificationService.getCurrentFormConfig();
   if (notification.id && (!existing || existing.id !== notification.id)) throw new Error('This Form alert does not belong to the current Google Form.');
   if (enforcePlan) {
-    LicenseService.assertCanSave({ id: existing ? existing.id : null, filter: notification.filter }, NotificationService.getAllRaw());
+    LicenseService.assertCanSave({ id: existing ? existing.id : null, messageType: notification.messageType, filter: notification.filter }, NotificationService.getAllRaw());
   }
   if (existing && !NotificationService.isEntitled(existing.id)) {
     throw new Error('This notification is outside the current plan limit. Upgrade or delete another notification to test it.');

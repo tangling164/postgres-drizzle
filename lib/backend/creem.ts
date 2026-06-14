@@ -49,19 +49,21 @@ export type CreemEvent =
   | { kind: 'refund_or_dispute'; orderId: string; disposition: 'refunded' | 'disputed' }
   | { kind: 'ignored'; type: string }
 
-/* eslint-disable @typescript-eslint/no-explicit-any */
-function pick(source: any, paths: string[][]): unknown {
+function pick(source: unknown, paths: string[][]): unknown {
   for (const path of paths) {
-    let current: any = source
+    let current: unknown = source
     for (const segment of path) {
-      current = current?.[segment]
+      if (typeof current !== 'object' || current === null) {
+        current = undefined
+        break
+      }
+      current = (current as Record<string, unknown>)[segment]
       if (current === undefined || current === null) break
     }
     if (current !== undefined && current !== null) return current
   }
   return null
 }
-/* eslint-enable @typescript-eslint/no-explicit-any */
 
 function asProductId(value: unknown): string | null {
   if (value === null || value === undefined) return null

@@ -84,9 +84,12 @@ const PAST = new Date('2026-06-01T12:00:00Z')
 console.log('license.ts')
 
 test('generated codes match the documented format', () => {
-  for (let i = 0; i < 50; i += 1) {
-    const code = license.generateLicenseCode()
-    assert.match(code, license.LICENSE_CODE_PATTERN)
+  for (const plan of ['standard', 'business']) {
+    for (let i = 0; i < 25; i += 1) {
+      const code = license.generateLicenseCode(plan)
+      assert.match(code, license.LICENSE_CODE_PATTERN)
+      assert.equal(code.startsWith(plan === 'business' ? 'FA-B-' : 'FA-S-'), true)
+    }
   }
 })
 
@@ -97,19 +100,34 @@ test('charset excludes ambiguous characters 0/O/1/I/L', () => {
 })
 
 test('format validation normalizes case and whitespace', () => {
-  assert.equal(license.isValidLicenseCodeFormat(' fa-abcd-efgh-jkmn-pqrs '), true)
-  assert.equal(license.isValidLicenseCodeFormat('FA-ABCD-EFGH'), false)
-  assert.equal(license.isValidLicenseCodeFormat('FA-AB0D-EFGH-JKMN-PQRS'), false)
+  assert.equal(license.isValidLicenseCodeFormat(' fa-s-abcde-fghjk-mnpqr-stuvw '), true)
+  assert.equal(license.isValidLicenseCodeFormat('FA-B-ABCDE-FGHJK-MNPQR-STUVW'), true)
+  assert.equal(license.isValidLicenseCodeFormat('FA-ABCD-EFGH-JKMN-PQRS'), false)
+  assert.equal(license.isValidLicenseCodeFormat('STANDARD-TEST'), false)
+  assert.equal(license.isValidLicenseCodeFormat('BUSINESS-TEST'), false)
+  assert.equal(license.isValidLicenseCodeFormat('FA-S-ABCDE-FGHJK'), false)
+  assert.equal(license.isValidLicenseCodeFormat('FA-S-ABC0E-FGHJK-MNPQR-STUVW'), false)
   assert.equal(license.isValidLicenseCodeFormat(''), false)
 })
 
 test('hash is deterministic and pepper-sensitive', () => {
-  const a = license.hashLicenseCode('FA-ABCD-EFGH-JKMN-PQRS', 'pepper-1')
-  const b = license.hashLicenseCode('fa-abcd-efgh-jkmn-pqrs', 'pepper-1')
-  const c = license.hashLicenseCode('FA-ABCD-EFGH-JKMN-PQRS', 'pepper-2')
+  const a = license.hashLicenseCode('FA-S-ABCDE-FGHJK-MNPQR-STUVW', 'pepper-1')
+  const b = license.hashLicenseCode('fa-s-abcde-fghjk-mnpqr-stuvw', 'pepper-1')
+  const c = license.hashLicenseCode('FA-S-ABCDE-FGHJK-MNPQR-STUVW', 'pepper-2')
   assert.equal(a, b)
   assert.notEqual(a, c)
   assert.throws(() => license.hashLicenseCode('FA-ABCD-EFGH-JKMN-PQRS', ''))
+})
+
+test('M1 transaction paths use the direct database connection', () => {
+  for (const source of [
+    'app/v2/license/activate/route.ts',
+    'lib/backend/accounts.ts',
+    'app/api/jobs/downgrade-expired/route.ts',
+  ]) {
+    const contents = readFileSync(join(repoRoot, source), 'utf8')
+    assert.match(contents, /getSql\(\{ transaction: true \}\)/)
+  }
 })
 
 test('timingSafeEqualHex compares correctly', () => {

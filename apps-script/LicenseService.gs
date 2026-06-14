@@ -1,33 +1,46 @@
 var LicenseService = {
   PLAN_LIMITS: {
-    free: { plan: 'free', label: 'Free', maxForms: 1, maxNotifications: 1, maxConditions: 1, credits: 30 },
-    standard: { plan: 'standard', label: 'Standard', maxForms: 10, maxNotifications: 10, maxConditions: 5, credits: null },
-    business: { plan: 'business', label: 'Business', maxForms: 20, maxNotifications: 20, maxConditions: 10, credits: null }
+    none: { plan: 'none', label: 'Trial ended', maxForms: 0, maxNotifications: 0, maxConditions: 0, allowsPayload: false, credits: 0 },
+    free: { plan: 'free', label: 'Free', maxForms: 1, maxNotifications: 1, maxConditions: 0, allowsPayload: false, credits: 30 },
+    standard: { plan: 'standard', label: 'Standard', maxForms: 20, maxNotifications: 20, maxConditions: 50, allowsPayload: true, credits: null },
+    business: { plan: 'business', label: 'Business', maxForms: 100, maxNotifications: 100, maxConditions: 50, allowsPayload: true, credits: null }
   },
 
   getPlan: function () {
     var properties = ConfigService.userProperties();
+    this.retireLegacyLocalLicense(properties);
     var plan = properties.getProperty(FormAlertConfig.KEYS.PLAN) || 'free';
     return this.PLAN_LIMITS[plan] || this.PLAN_LIMITS.free;
   },
 
-  activate: function (licenseCode) {
-    var normalized = String(licenseCode || '').trim().toUpperCase();
-    var plan = normalized === 'FREE' ? 'free' : normalized === 'STANDARD-TEST' ? 'standard' : normalized === 'BUSINESS-TEST' ? 'business' : null;
-    if (!plan) {
-      throw new Error('License code is invalid or expired.');
-    }
-    var properties = ConfigService.userProperties();
-    if (plan === 'free') properties.deleteProperty(FormAlertConfig.KEYS.LICENSE_CODE);
-    else properties.setProperty(FormAlertConfig.KEYS.LICENSE_CODE, normalized);
-    properties.setProperty(FormAlertConfig.KEYS.PLAN, plan);
-    return this.getUsage();
+  retireLegacyLocalLicense: function (properties) {
+    if (!properties.getProperty(FormAlertConfig.KEYS.LICENSE_CODE)) return false;
+    properties.deleteProperty(FormAlertConfig.KEYS.LICENSE_CODE);
+    properties.deleteProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT);
+    properties.setProperty(FormAlertConfig.KEYS.PLAN, 'free');
+    return true;
   },
 
-  resetToFree: function () {
+  activate: function (licenseCode) {
+    var result = BackendService.activateLicense(licenseCode);
+    return this.applyRemotePlan(result);
+  },
+
+  refreshUsage: function () {
+    return this.applyRemotePlan(BackendService.getPlan());
+  },
+
+  applyRemotePlan: function (result) {
+    var remotePlan = result && result.plan;
+    var plan = this.PLAN_LIMITS[remotePlan] ? remotePlan : 'none';
     var properties = ConfigService.userProperties();
+    properties.setProperty(FormAlertConfig.KEYS.PLAN, plan);
     properties.deleteProperty(FormAlertConfig.KEYS.LICENSE_CODE);
-    properties.setProperty(FormAlertConfig.KEYS.PLAN, 'free');
+    if (result && result.valid_until) {
+      properties.setProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT, result.valid_until);
+    } else {
+      properties.deleteProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT);
+    }
     return this.getUsage();
   },
 
@@ -45,6 +58,8 @@ var LicenseService = {
       maxForms: plan.maxForms,
       maxNotifications: plan.maxNotifications,
       maxConditions: plan.maxConditions,
+      allowsPayload: plan.allowsPayload,
+      validUntil: ConfigService.userProperties().getProperty(FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
       creditsTotal: plan.credits,
       creditsUsed: plan.credits === null ? 0 : used,
       creditsLeft: plan.credits === null ? null : Math.max(0, plan.credits - used)
@@ -61,6 +76,7 @@ var LicenseService = {
     if (conditions.length > plan.maxConditions) {
       throw new Error(plan.label + ' allows up to ' + plan.maxConditions + ' filter condition' + (plan.maxConditions === 1 ? '.' : 's.'));
     }
+    this.assertSupportsMessageType(notification.messageType);
   },
 
   assertCanExecute: function (notification) {
@@ -68,6 +84,13 @@ var LicenseService = {
     var conditions = notification && notification.filter && notification.filter.conditions ? notification.filter.conditions : [];
     if (conditions.length > plan.maxConditions) {
       throw new Error(plan.label + ' allows up to ' + plan.maxConditions + ' filter condition' + (plan.maxConditions === 1 ? '.' : 's.') + ' Edit this notification to continue.');
+    }
+    this.assertSupportsMessageType(notification && notification.messageType);
+  },
+
+  assertSupportsMessageType: function (messageType) {
+    if (messageType === 'payload' && !this.getPlan().allowsPayload) {
+      throw new Error('Payload Mode requires a paid plan.');
     }
   },
 
@@ -79,7 +102,11 @@ var LicenseService = {
   },
 
   reserveSendCredit: function () {
-    if (this.getPlan().plan !== 'free') return false;
+    var plan = this.getPlan().plan;
+    if (plan === 'none') {
+      throw new Error('Your Free trial has ended. Upgrade to continue sending alerts.');
+    }
+    if (plan !== 'free') return false;
     return ConfigService.withDocumentLock(function () {
       var properties = ConfigService.documentProperties();
       var used = LicenseService.getUsedCredits();

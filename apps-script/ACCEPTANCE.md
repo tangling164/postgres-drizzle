@@ -23,8 +23,8 @@ This document separates locally verified behavior from checks that require a rea
 | Trigger setup recovery | `needs_setup`, Fix setup, Form source ID detection, duplicate cleanup, and redacted failure logging tests | Verified |
 | Form submit pipeline | Simulated Forms `e.response` event covers `onFormSubmit()` execution | Locally verified; real Google event requires manual check |
 | Last status and Copy debug info | Latest 10 logs use a strict metadata whitelist; no response, Webhook, payload, email, or notification name | Verified |
-| Mock licenses and limits | Free 1, Standard 10, Business 20 connected Forms; paused Forms count and Delete releases a slot | Verified |
-| No prohibited integrations | Manifest/source tests reject Sheets, Drive, Gmail, AI, and non-Slack endpoints | Verified |
+| License activation and limits | OIDC-authenticated entitlement API activation; Free 1, Standard 20, Business 100 connected Forms; paid plans allow up to the 50-condition safety limit | Verified |
+| No prohibited integrations | Manifest/source tests reject Sheets, Drive, Gmail, AI, and endpoints other than Slack plus the FormAlert entitlement API | Verified |
 
 Run the automated checks with:
 
@@ -53,6 +53,9 @@ Budget = 100, Message = General question, Priority = Low
 
 - [ ] Reload the Form editor and open FormAlert from the top-right add-on button.
 - [ ] Confirm the Sidebar shows the current Google account, plan, connected Form count, and no full log list.
+- [ ] Activate a Creem Test-mode License Code and confirm the Sidebar refreshes to the purchased Standard or Business plan.
+- [ ] Re-enter the same License Code on the same account and confirm activation remains successful without creating another active license.
+- [ ] Try the activated License Code on another Google account and confirm the add-on reports that the code is already used.
 - [ ] Open another configured Form and confirm the same account-level Connected Forms list appears.
 - [ ] Click Refresh Fields and confirm all current Form questions appear.
 - [ ] Insert `{{Budget}}` into Message Mode at the current cursor position.

@@ -22,6 +22,7 @@ class FakeProperties {
 
 const documentProperties = new FakeProperties()
 const userProperties = new FakeProperties()
+const scriptProperties = new FakeProperties()
 const triggers = []
 let triggerShouldFail = false
 let uuidCounter = 0
@@ -97,6 +98,7 @@ const context = {
   PropertiesService: {
     getDocumentProperties: () => documentProperties,
     getUserProperties: () => userProperties,
+    getScriptProperties: () => scriptProperties,
   },
   Utilities: {
     getUuid: () => `${String(++uuidCounter).padStart(8, '0')}-0000-0000-0000-000000000000`,
@@ -135,6 +137,7 @@ const context = {
       ON_EDIT: 'ON_EDIT',
     },
     getProjectTriggers: () => triggers,
+    getIdentityToken: () => 'test-identity-token',
     deleteTrigger: trigger => {
       const index = triggers.indexOf(trigger)
       if (index >= 0) triggers.splice(index, 1)
@@ -162,6 +165,7 @@ vm.createContext(context)
 const root = path.resolve(__dirname, '..')
 const serviceFiles = [
   'ConfigService.gs',
+  'BackendService.gs',
   'LicenseService.gs',
   'RuleEngine.gs',
   'MessageRenderer.gs',
@@ -177,6 +181,11 @@ const serviceFiles = [
 for (const file of serviceFiles) {
   vm.runInContext(fs.readFileSync(path.join(root, file), 'utf8'), context, { filename: file })
 }
+
+context.BackendService.getPlan = () => ({
+  plan: context.LicenseService.getPlan().plan,
+  valid_until: userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT),
+})
 
 const readFieldsFromForm = context.FieldService.getFields.bind(context.FieldService)
 const readLatestResponse = context.FieldService.getLatestResponse.bind(context.FieldService)
@@ -209,6 +218,10 @@ function ok(value) {
 function throws(fn, pattern) {
   assertions += 1
   assert.throws(fn, pattern)
+}
+function setPlan(plan) {
+  userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN, plan)
+  return context.LicenseService.getUsage()
 }
 
 test('numeric operators support all six comparisons and formatted numbers', () => {
@@ -329,20 +342,73 @@ test('SlackService only posts JSON to a valid Slack Incoming Webhook', () => {
   equal(context.SlackService.send(webhook, { text: 'hello' }).error, 'Slack returned an error. Please check your webhook.')
 })
 
-test('mock licenses enforce Free limits and unlock Standard or Business', () => {
+test('remote plan state enforces Free limits and unlocks Standard or Business', () => {
   equal(context.LicenseService.getUsage().plan, 'free')
   equal(context.LicenseService.getUsage().creditsLeft, 30)
   context.LicenseService.recordSend()
   equal(context.LicenseService.getUsage().creditsLeft, 29)
-  equal(context.LicenseService.activate('STANDARD-TEST').maxConditions, 5)
-  context.LicenseService.assertCanSave({ id: null, filter: { conditions: [] } }, Array.from({ length: 9 }, () => ({})))
-  throws(() => context.LicenseService.assertCanSave({ id: null, filter: { conditions: [] } }, Array.from({ length: 10 }, () => ({}))), /10 connected Google Forms/)
-  equal(context.LicenseService.activate('BUSINESS-TEST').maxForms, 20)
-  equal(context.LicenseService.getUsage().maxConditions, 10)
-  context.LicenseService.assertCanSave({ id: null, filter: { conditions: [] } }, Array.from({ length: 19 }, () => ({})))
-  throws(() => context.LicenseService.assertCanSave({ id: null, filter: { conditions: [] } }, Array.from({ length: 20 }, () => ({}))), /20 connected Google Forms/)
-  equal(context.LicenseService.activate('FREE').plan, 'free')
-  throws(() => context.LicenseService.activate('BAD-CODE'), /invalid/)
+  equal(setPlan('standard').maxConditions, 50)
+  context.LicenseService.assertCanSave({ id: null, messageType: 'message', filter: { conditions: [] } }, Array.from({ length: 19 }, () => ({})))
+  throws(() => context.LicenseService.assertCanSave({ id: null, messageType: 'message', filter: { conditions: [] } }, Array.from({ length: 20 }, () => ({}))), /20 connected Google Forms/)
+  equal(setPlan('business').maxForms, 100)
+  equal(context.LicenseService.getUsage().maxConditions, 50)
+  context.LicenseService.assertCanSave({ id: null, messageType: 'message', filter: { conditions: [] } }, Array.from({ length: 99 }, () => ({})))
+  throws(() => context.LicenseService.assertCanSave({ id: null, messageType: 'message', filter: { conditions: [] } }, Array.from({ length: 100 }, () => ({}))), /100 connected Google Forms/)
+  equal(setPlan('free').plan, 'free')
+  throws(() => context.LicenseService.assertCanSave({ id: 'existing', messageType: 'message', filter: { conditions: [{}] } }, []), /up to 0 filter conditions/)
+  throws(() => context.LicenseService.assertCanSave({ id: 'existing', messageType: 'payload', filter: { conditions: [] } }, []), /Payload Mode requires/)
+})
+
+test('BackendService sends the identity token and LicenseService stores only remote plan state', () => {
+  let request
+  const originalFetch = context.UrlFetchApp.fetch
+  let fetchCount = 0
+  context.UrlFetchApp.fetch = (url, options) => {
+    fetchCount += 1
+    request = { url, options }
+    return {
+      getResponseCode: () => 200,
+      getContentText: () => JSON.stringify({
+        status: 'activated',
+        plan: 'standard',
+        valid_until: '2026-07-14T00:00:00.000Z',
+      }),
+    }
+  }
+  throws(() => context.LicenseService.activate('STANDARD-TEST'), /purchase email/)
+  throws(() => context.LicenseService.activate('BUSINESS-TEST'), /purchase email/)
+  throws(() => context.LicenseService.activate('FA-ABCD-EFGH-JKMN-PQRS'), /purchase email/)
+  equal(fetchCount, 0)
+
+  const usage = context.LicenseService.activate('FA-S-ABCDE-FGHJK-MNPQR-STUVW')
+  equal(fetchCount, 1)
+  equal(usage.plan, 'standard')
+  equal(usage.maxForms, 20)
+  equal(request.url, 'https://www.formnotifyforslack.com/v2/license/activate')
+  equal(request.options.headers.Authorization, 'Bearer test-identity-token')
+  equal(JSON.parse(request.options.payload).code, 'FA-S-ABCDE-FGHJK-MNPQR-STUVW')
+  equal(userProperties.getProperty(context.FormAlertConfig.KEYS.LICENSE_CODE), null)
+  equal(userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT), '2026-07-14T00:00:00.000Z')
+  equal(context.LicenseService.applyRemotePlan({ plan: 'none', valid_until: null }).plan, 'none')
+  throws(() => context.LicenseService.reserveSendCredit(), /Free trial has ended/)
+
+  context.UrlFetchApp.fetch = () => ({
+    getResponseCode: () => 409,
+    getContentText: () => JSON.stringify({ error: 'license_already_used' }),
+  })
+  throws(() => context.LicenseService.activate('FA-S-ABCDE-FGHJK-MNPQR-STUVW'), /already active on another Google account/)
+  context.UrlFetchApp.fetch = originalFetch
+  setPlan('free')
+})
+
+test('legacy local Test licenses are retired before cached paid access is read', () => {
+  userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN, 'business')
+  userProperties.setProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT, '2099-01-01T00:00:00.000Z')
+  userProperties.setProperty(context.FormAlertConfig.KEYS.LICENSE_CODE, 'BUSINESS-TEST')
+
+  equal(context.LicenseService.getPlan().plan, 'free')
+  equal(userProperties.getProperty(context.FormAlertConfig.KEYS.LICENSE_CODE), null)
+  equal(userProperties.getProperty(context.FormAlertConfig.KEYS.PLAN_EXPIRES_AT), null)
 })
 
 const validNotification = {
@@ -353,6 +419,10 @@ const validNotification = {
   messageTemplate: 'Refund: {{Message}}',
   payloadTemplate: '',
   filter: { match: 'all', conditions: [{ fieldId: '12', fieldTitle: 'Message', fieldType: 'text', operator: 'contains', value: 'refund' }] },
+}
+const freeNotification = {
+  ...validNotification,
+  filter: { match: 'all', conditions: [] },
 }
 
 test('save validation enforces payload JSON and plan condition limits', () => {
@@ -375,16 +445,16 @@ test('save validation enforces payload JSON and plan condition limits', () => {
     { fieldId: '12', fieldTitle: 'Message', fieldType: 'text', operator: 'contains', value: 'refund' },
     { fieldId: '13', fieldTitle: 'Priority', fieldType: 'text', operator: 'text_eq', value: 'High' },
   ]
-  context.LicenseService.activate('FREE')
-  throws(() => context.LicenseService.assertCanSave({ id: 'existing', filter: { match: 'all', conditions } }, []), /up to 1 filter condition/)
+  setPlan('free')
+  throws(() => context.LicenseService.assertCanSave({ id: 'existing', messageType: 'message', filter: { match: 'all', conditions } }, []), /up to 0 filter conditions/)
   const fourConditions = conditions.concat(conditions)
-  context.LicenseService.activate('STANDARD-TEST')
-  context.LicenseService.assertCanSave({ id: 'existing', filter: { match: 'all', conditions: fourConditions } }, [])
-  const sixConditions = fourConditions.concat(conditions)
-  throws(() => context.LicenseService.assertCanSave({ id: 'existing', filter: { match: 'all', conditions: sixConditions } }, []), /up to 5 filter conditions/)
-  context.LicenseService.activate('BUSINESS-TEST')
-  context.LicenseService.assertCanSave({ id: 'existing', filter: { match: 'all', conditions: sixConditions } }, [])
-  throws(() => context.LicenseService.assertCanSave({ id: 'existing', filter: { match: 'all', conditions: Array.from({ length: 11 }, () => conditions[0]) } }, []), /up to 10 filter conditions/)
+  setPlan('standard')
+  context.LicenseService.assertCanSave({ id: 'existing', messageType: 'message', filter: { match: 'all', conditions: fourConditions } }, [])
+  const fiftyOneConditions = Array.from({ length: 51 }, () => conditions[0])
+  throws(() => context.LicenseService.assertCanSave({ id: 'existing', messageType: 'message', filter: { match: 'all', conditions: fiftyOneConditions } }, []), /up to 50 filter conditions/)
+  setPlan('business')
+  context.LicenseService.assertCanSave({ id: 'existing', messageType: 'payload', filter: { match: 'all', conditions: fourConditions } }, [])
+  throws(() => context.LicenseService.assertCanSave({ id: 'existing', messageType: 'message', filter: { match: 'all', conditions: fiftyOneConditions } }, []), /up to 50 filter conditions/)
   const noFilter = context.NotificationService.validateAndNormalize({ ...validNotification, filter: { match: 'all', conditions: [] } }, null)
   equal(noFilter.filter.conditions.length, 0)
   equal(noFilter.formTitle, 'Customer Intake Form')
@@ -392,13 +462,11 @@ test('save validation enforces payload JSON and plan condition limits', () => {
 })
 
 test('one Form stores one user-level alert and installs one trigger', () => {
-  context.LicenseService.activate('FREE')
+  setPlan('free')
   switchToActiveForm()
-  const saved = context.NotificationService.save(validNotification)
+  const saved = context.NotificationService.save(freeNotification)
   ok(saved.notification.id)
-  equal(saved.notification.filter.conditions[0].fieldId, '12')
-  equal(saved.notification.filter.conditions[0].enabled, true)
-  ok(saved.notification.filter.conditions[0].id)
+  equal(saved.notification.filter.conditions.length, 0)
   equal(saved.notification.formId, 'form-file')
   equal(saved.notification.formTitle, 'Customer Intake Form')
   equal(Object.prototype.hasOwnProperty.call(saved.notification, 'sheetId'), false)
@@ -411,20 +479,20 @@ test('one Form stores one user-level alert and installs one trigger', () => {
   equal(storedIndex.includes('Refund: {{Message}}'), false)
   context.TriggerService.ensureFormSubmitTrigger()
   equal(triggers.length, 1)
-  const updated = context.NotificationService.save({ ...validNotification, messageTemplate: 'Updated {{Message}}' })
+  const updated = context.NotificationService.save({ ...freeNotification, messageTemplate: 'Updated {{Message}}' })
   equal(updated.notification.id, saved.notification.id)
   equal(context.NotificationService.getAll().length, 1)
   switchForm('form-2', 'Support Request Form')
-  throws(() => context.NotificationService.save(validNotification), /1 connected Google Form/)
-  throws(() => context.NotificationService.save({ ...validNotification, id: 'unknown-id' }), /does not belong/)
-  context.LicenseService.activate('STANDARD-TEST')
+  throws(() => context.NotificationService.save(freeNotification), /1 connected Google Form/)
+  throws(() => context.NotificationService.save({ ...freeNotification, id: 'unknown-id' }), /does not belong/)
+  setPlan('standard')
   context.NotificationService.save(validNotification)
   equal(context.NotificationService.getAll().length, 2)
   switchToActiveForm()
 })
 
 test('current plan entitles connected Forms by most recent update', () => {
-  context.LicenseService.activate('FREE')
+  setPlan('free')
   const all = context.NotificationService.getAllRaw()
   all[1].updatedAt = '2099-01-01T00:00:00.000Z'
   context.NotificationService.writeFormConfig(all[1])
@@ -439,7 +507,7 @@ test('current plan entitles connected Forms by most recent update', () => {
 })
 
 test('Connected Forms supports unique form IDs, title search, and ten-item pagination', () => {
-  context.LicenseService.activate('BUSINESS-TEST')
+  setPlan('business')
   for (let index = 3; index <= 11; index += 1) {
     switchForm(`form-${index}`, index >= 10 ? 'Duplicate Form Title' : `Form ${index}`)
     context.NotificationService.save(validNotification)
@@ -455,39 +523,39 @@ test('Connected Forms supports unique form IDs, title search, and ten-item pagin
   equal(Object.prototype.hasOwnProperty.call(context.NotificationService.getPage('', 1, 10).items[0], 'name'), false)
   ok(context.NotificationService.getPage('', 1, 10).items[0].formId)
   equal(new Set(context.NotificationService.getAllRaw().map(item => item.formId)).size, 11)
-  context.LicenseService.activate('STANDARD-TEST')
-  equal(context.NotificationService.getEnabled().length, 10)
-  context.LicenseService.activate('BUSINESS-TEST')
+  setPlan('standard')
+  equal(context.NotificationService.getEnabled().length, 11)
+  setPlan('business')
   equal(context.NotificationService.getEnabled().length, 11)
   equal(context.getSidebarBootstrap().notifications.length, 3)
   equal(context.getSidebarBootstrap().userEmail, 'tester@example.com')
   equal(context.getSidebarBootstrap().formCount, 11)
 })
 
-test('Business allows 20 connected Forms, paused Forms count, and Delete releases a slot', () => {
-  context.LicenseService.activate('BUSINESS-TEST')
-  for (let index = 12; index <= 20; index += 1) {
+test('Business allows 100 connected Forms and paused Forms still count toward the limit', () => {
+  setPlan('business')
+  for (let index = 12; index <= 100; index += 1) {
     switchForm(`form-${index}`, `Form ${index}`)
     context.NotificationService.save(validNotification)
   }
-  equal(context.NotificationService.getAllRaw().length, 20)
-  const paused = context.NotificationService.getByFormId('form-20')
+  equal(context.NotificationService.getAllRaw().length, 100)
+  const paused = context.NotificationService.getByFormId('form-100')
   context.NotificationService.setEnabled(paused.id, false)
-  equal(context.NotificationService.getAllRaw().length, 20)
-  switchForm('form-21', 'Form 21')
-  throws(() => context.NotificationService.save(validNotification), /20 connected Google Forms/)
-  const removed = context.NotificationService.getByFormId('form-20')
-  equal(context.TriggerService.getFormSubmitTriggers('form-20').length, 1)
+  equal(context.NotificationService.getAllRaw().length, 100)
+  switchForm('form-101', 'Form 101')
+  throws(() => context.NotificationService.save(validNotification), /100 connected Google Forms/)
+  const removed = context.NotificationService.getByFormId('form-100')
+  equal(context.TriggerService.getFormSubmitTriggers('form-100').length, 1)
   equal(context.NotificationService.remove(removed.id).ok, true)
-  equal(context.TriggerService.getFormSubmitTriggers('form-20').length, 0)
-  equal(context.NotificationService.getAllRaw().length, 19)
+  equal(context.TriggerService.getFormSubmitTriggers('form-100').length, 0)
+  equal(context.NotificationService.getAllRaw().length, 99)
   context.NotificationService.save(validNotification)
-  equal(context.NotificationService.getAllRaw().length, 20)
+  equal(context.NotificationService.getAllRaw().length, 100)
   switchToActiveForm()
 })
 
 test('Pause and Resume change automatic submission behavior without opening the editor', () => {
-  context.LicenseService.activate('BUSINESS-TEST')
+  setPlan('business')
   switchToActiveForm()
   const notification = context.NotificationService.getCurrentFormConfig()
   let sends = 0
@@ -496,7 +564,7 @@ test('Pause and Resume change automatic submission behavior without opening the 
     return { ok: true, responseCode: 200 }
   }
   equal(context.NotificationService.setEnabled(notification.id, false).enabled, false)
-  equal(context.NotificationService.getEnabled().length, 19)
+  equal(context.NotificationService.getEnabled().length, 99)
   const pausedResults = context.ExecutionService.runAll({ Message: 'refund please' }, notification.formId)
   equal(pausedResults.length, 1)
   equal(pausedResults[0].status, 'paused')
@@ -504,7 +572,7 @@ test('Pause and Resume change automatic submission behavior without opening the 
   equal(context.DebugService.getLastStatus().status, 'paused')
   equal(context.DebugService.getLastStatus().reasonCode, 'PAUSED')
   equal(context.NotificationService.setEnabled(notification.id, true).enabled, true)
-  equal(context.NotificationService.getEnabled().length, 20)
+  equal(context.NotificationService.getEnabled().length, 100)
 })
 
 test('trigger failures expose needs setup and can be fixed', () => {
@@ -553,14 +621,17 @@ test('trigger setup ignores other Forms and removes duplicates for the current F
 })
 
 test('execution sends matched responses, skips nonmatches, and records test status', () => {
-  context.LicenseService.activate('BUSINESS-TEST')
+  setPlan('business')
   switchToActiveForm()
   let sends = 0
   context.SlackService.send = () => {
     sends += 1
     return { ok: true, responseCode: 200 }
   }
-  const notification = context.NotificationService.getCurrentFormConfig()
+  const notification = {
+    ...context.NotificationService.getCurrentFormConfig(),
+    filter: validNotification.filter,
+  }
   equal(context.ExecutionService.run(notification, { Message: 'refund please' }, { isTest: false }).status, 'sent')
   equal(sends, 1)
   equal(context.ExecutionService.run(notification, { Message: 'hello' }, { isTest: false }).status, 'skipped')
@@ -586,7 +657,7 @@ test('execution sends matched responses, skips nonmatches, and records test stat
 })
 
 test('Send Test skips filters, static templates need no response, and latest response test applies filters', () => {
-  context.LicenseService.activate('FREE')
+  setPlan('free')
   switchToActiveForm()
   let sends = 0
   context.SlackService.send = () => {
@@ -614,13 +685,13 @@ test('Send Test skips filters, static templates need no response, and latest res
   })
   equal(context.testLatestResponseApi({ ...staticNotification, filter: { match: 'all', conditions: [] } }).status, 'test')
   equal(sends, 2)
-  context.LicenseService.activate('STANDARD-TEST')
+  setPlan('standard')
   equal(context.testLatestResponseApi(staticNotification).status, 'skipped')
   equal(sends, 2)
 })
 
 test('Budget greater than 100 sends while Budget at or below 100 skips', () => {
-  context.LicenseService.activate('STANDARD-TEST')
+  setPlan('standard')
   let sends = 0
   context.SlackService.send = () => {
     sends += 1
@@ -642,7 +713,7 @@ test('Budget greater than 100 sends while Budget at or below 100 skips', () => {
 })
 
 test('automatic execution enforces condition limits after a plan downgrade', () => {
-  context.LicenseService.activate('FREE')
+  setPlan('free')
   let sends = 0
   context.SlackService.send = () => {
     sends += 1
@@ -660,7 +731,7 @@ test('automatic execution enforces condition limits after a plan downgrade', () 
   }
   const result = context.ExecutionService.run(downgradedNotification, { Message: 'refund', Priority: 'High' }, { isTest: false })
   equal(result.status, 'error')
-  equal(result.message.includes('Free allows up to 1 filter condition'), true)
+  equal(result.message.includes('Free allows up to 0 filter conditions'), true)
   equal(sends, 0)
   equal(context.DebugService.getLastStatus().reasonCode, 'PLAN_LIMIT')
   const original = context.NotificationService.getCurrentFormConfig()
@@ -669,8 +740,35 @@ test('automatic execution enforces condition limits after a plan downgrade', () 
   context.NotificationService.writeFormConfig(original)
 })
 
+test('automatic submissions refresh the remote plan before enforcing paid features', () => {
+  setPlan('business')
+  switchToActiveForm()
+  const originalPlanLoader = context.BackendService.getPlan
+  const original = context.NotificationService.getCurrentFormConfig()
+  const paidOnlyNotification = {
+    ...original,
+    filter: validNotification.filter,
+    updatedAt: '2099-12-31T00:00:00.000Z',
+  }
+  context.NotificationService.writeFormConfig(paidOnlyNotification)
+  context.BackendService.getPlan = () => ({ plan: 'free', valid_until: null })
+  let sends = 0
+  context.SlackService.send = () => {
+    sends += 1
+    return { ok: true, responseCode: 200 }
+  }
+
+  const results = context.ExecutionService.runAll({ Message: 'refund please' }, paidOnlyNotification.formId)
+  equal(context.LicenseService.getUsage().plan, 'free')
+  equal(results[0].status, 'error')
+  equal(sends, 0)
+
+  context.BackendService.getPlan = originalPlanLoader
+  context.NotificationService.writeFormConfig(original)
+})
+
 test('tests do not consume Free credits while real sends do', () => {
-  context.LicenseService.activate('FREE')
+  setPlan('free')
   switchToActiveForm()
   documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, '0')
   context.SlackService.send = () => ({ ok: true, responseCode: 200 })
@@ -684,7 +782,7 @@ test('tests do not consume Free credits while real sends do', () => {
 })
 
 test('Free credits are reserved atomically and rolled back when Slack fails', () => {
-  context.LicenseService.activate('FREE')
+  setPlan('free')
   switchToActiveForm()
   const notification = context.NotificationService.getCurrentFormConfig()
   documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, '29')
@@ -813,13 +911,15 @@ test('corrupt local property values recover to safe defaults', () => {
   documentProperties.setProperty(context.FormAlertConfig.KEYS.FREE_CREDITS_USED, credits)
 })
 
-test('manifest and source avoid Drive, Gmail, AI, and server endpoints', () => {
+test('manifest and source allow only Slack and the FormAlert entitlement API', () => {
   const manifest = fs.readFileSync(path.join(root, 'appsscript.json'), 'utf8')
   const parsedManifest = JSON.parse(manifest)
   equal(manifest.includes('/auth/drive'), false)
   equal(manifest.includes('/auth/gmail'), false)
   equal(parsedManifest.urlFetchWhitelist[0], 'https://hooks.slack.com/services/')
+  equal(parsedManifest.urlFetchWhitelist[1], 'https://www.formnotifyforslack.com/')
   equal(JSON.stringify(parsedManifest.oauthScopes.slice().sort()), JSON.stringify([
+    'openid',
     'https://www.googleapis.com/auth/script.container.ui',
     'https://www.googleapis.com/auth/script.external_request',
     'https://www.googleapis.com/auth/script.scriptapp',
@@ -829,7 +929,7 @@ test('manifest and source avoid Drive, Gmail, AI, and server endpoints', () => {
   const source = serviceFiles.map((file) => fs.readFileSync(path.join(root, file), 'utf8')).join('\n')
   equal(/\bDriveApp\b|\bGmailApp\b|\bSpreadsheetApp\b/.test(source), false)
   equal(/\bFormApp\b/.test(source), true)
-  equal(/https?:\/\/(?!hooks\.slack\.com)/.test(source), false)
+  equal(/https?:\/\/(?!hooks\.slack\.com|www\.formnotifyforslack\.com)/.test(source), false)
   equal(/\breason\s*:/.test(fs.readFileSync(path.join(root, 'DebugService.gs'), 'utf8')), false)
   const code = fs.readFileSync(path.join(root, 'Code.gs'), 'utf8')
   ok(code.includes('function showSidebar()'))

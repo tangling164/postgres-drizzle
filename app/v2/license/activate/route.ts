@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
   const codeHash = hashLicenseCode(normalizeLicenseCode(rawCode), pepper)
 
   const account = await ensureAccount(identity.sub, identity.email)
-  const sql = getSql()
+  const sql = getSql({ transaction: true })
 
   const outcome = await sql.begin(async (tx) => {
     const licenses = await tx`

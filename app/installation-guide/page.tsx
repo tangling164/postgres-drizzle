@@ -54,7 +54,7 @@ export default function InstallationGuidePage() {
             <div className="icon-line"><Play weight="fill" /><span>New response</span><LinkSimple /><span>Local rule check</span><FunnelSimple /><span>Slack alert</span><PaperPlaneTilt weight="fill" /></div>
           </GuideStep>
           <GuideStep number={8} title="Troubleshoot common errors" description="Check the next action shown in the add-on when a Webhook, field, payload, License Code, or trigger needs attention.">
-            <ul className="check-list"><li>Confirm the Webhook starts with https://hooks.slack.com/services/</li><li>Refresh fields if Form questions changed</li><li>Validate Payload JSON after inserting variables</li><li>Submit one Form response before using Send Test</li><li>Open Support if a License Code needs manual reset</li></ul>
+            <ul className="check-list"><li>Confirm the Webhook starts with https://hooks.slack.com/services/</li><li>Refresh fields if Form questions changed</li><li>Validate Payload JSON after inserting variables</li><li>Submit one Form response before using Send Test</li><li>Open Support if a License Code needs replacement</li></ul>
           </GuideStep>
           <DocsNavigation next={{ href: '/faq', label: 'Frequently asked questions' }} />
         </article>

@@ -4,9 +4,11 @@
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
   "urlFetchWhitelist": [
-    "https://hooks.slack.com/services/"
+    "https://hooks.slack.com/services/",
+    "https://www.formnotifyforslack.com/"
   ],
   "oauthScopes": [
+    "openid",
     "https://www.googleapis.com/auth/script.container.ui",
     "https://www.googleapis.com/auth/forms.currentonly",
     "https://www.googleapis.com/auth/script.external_request",

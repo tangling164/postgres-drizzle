@@ -9,7 +9,7 @@ This directory contains the Google Forms Editor Add-on MVP. It is intentionally 
 - Keeps current-Form status and the latest 10 metadata-only debug logs in document properties.
 - Evaluates filters and renders templates in Apps Script.
 - Sends matching notifications directly from Apps Script to the configured Slack Incoming Webhook.
-- Does not call the FormAlert website or any FormAlert server.
+- Calls the FormAlert entitlement API only for Google-account identity, License Code activation, and plan refresh. Form responses, Slack Webhooks, templates, and rendered payloads never leave Apps Script.
 
 ## Files
 
@@ -24,7 +24,8 @@ PayloadService.gs        Block Kit JSON validation and safe rendering
 SlackService.gs          Direct Incoming Webhook delivery
 DebugService.gs          Redacted last status and latest 10 local logs
 TriggerService.gs        Idempotent Form submit trigger setup
-LicenseService.gs        FREE, STANDARD-TEST, BUSINESS-TEST mock plans
+LicenseService.gs        Cached entitlement state and local feature enforcement
+BackendService.gs        OIDC-authenticated License activation and plan refresh API client
 ExecutionService.gs      Filter, render, send, and status pipeline
 Sidebar.html             Main, All Notifications, Create/Edit UI
 appsscript.json          Least-privilege Forms manifest
@@ -38,7 +39,7 @@ ACCEPTANCE.md            Requirement matrix and real-runtime checklist
 2. Replace the Apps Script manifest with `appsscript.json`.
 3. Create an Editor Add-on test deployment and select a Google Form as the test document.
 4. Execute the test deployment and open FormAlert from the Forms add-on button.
-5. Approve the requested current-Form, external-request, trigger, and email scopes.
+5. Approve the requested current-Form, external-request, trigger, email, and OpenID scopes.
 
 The first saved Form alert automatically attempts to enable automatic alerts. When authorization or trigger setup fails, the Main view displays `Automatic alerts need setup` and `Fix setup`.
 
@@ -46,11 +47,9 @@ Google's Editor Add-on test deployments do not support installable triggers. Use
 
 For MVP testing, use one Google account as the Form configuration and trigger owner. Apps Script installable triggers execute as their creator.
 
-## Mock License Codes
+## License Activation
 
-- `FREE`
-- `STANDARD-TEST`
-- `BUSINESS-TEST`
+License Codes are purchased through Creem and delivered by email. Activation sends only the License Code and a short-lived Google identity token to the FormAlert entitlement API. The code is never stored in Apps Script properties.
 
 ## Local Verification
 
@@ -58,7 +57,7 @@ For MVP testing, use one Google account as the Form configuration and trigger ow
 pnpm test:plugin
 ```
 
-The local test suite covers cross-Form storage and pagination, one-Form-one-alert behavior, Form question discovery, stable item IDs, latest responses, operators, templates, plan limits, trigger lifecycle, execution statuses, migration, debug-log retention, and forbidden permission/server patterns.
+The local test suite covers entitlement API calls, cross-Form storage and pagination, one-Form-one-alert behavior, Form question discovery, stable item IDs, latest responses, operators, templates, plan limits, trigger lifecycle, execution statuses, migration, debug-log retention, and permission/server boundaries.
 
 See `ACCEPTANCE.md` for the requirement-by-requirement evidence and the real Google/Slack runtime checklist.
 

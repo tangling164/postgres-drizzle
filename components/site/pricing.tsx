@@ -23,7 +23,7 @@ const plans: readonly PricingPlan[] = [
     yearly: '$0',
     payment: 'No payment required',
     description: 'Try the complete local workflow in your current Google Form.',
-    features: ['7-day trial', '30 Slack sends', '1 connected Google Form', 'Message Mode', '1 filter condition', 'Latest 10 redacted debug entries'],
+    features: ['7-day trial', '30 Slack sends', '1 connected Google Form', 'Message Mode', 'Latest 10 redacted debug entries'],
   },
   {
     name: 'Standard',
@@ -31,7 +31,7 @@ const plans: readonly PricingPlan[] = [
     yearly: '$3.25',
     payment: '$39 billed yearly',
     description: 'For small teams filtering several Google Forms.',
-    features: ['Unlimited Slack sends', 'Up to 10 connected Google Forms', 'Message & Payload Mode', 'Up to 5 conditions per Form', 'Latest 10 redacted debug entries'],
+    features: ['Unlimited Slack sends', 'Up to 20 connected Google Forms', 'Message & Payload Mode', 'Unlimited conditions per Form*', 'Latest 10 redacted debug entries'],
     featured: true,
   },
   {
@@ -40,7 +40,7 @@ const plans: readonly PricingPlan[] = [
     yearly: '$6.50',
     payment: '$79 billed yearly',
     description: 'For teams running FormAlert across many workflows.',
-    features: ['Unlimited Slack sends', 'Up to 20 connected Google Forms', 'Message & Payload Mode', 'Up to 10 conditions per Form', 'Latest 10 redacted debug entries', 'Priority support'],
+    features: ['Unlimited Slack sends', 'Up to 100 connected Google Forms', 'Message & Payload Mode', 'Unlimited conditions per Form*', 'Latest 10 redacted debug entries', 'Priority support'],
   },
 ] as const
 
@@ -78,7 +78,7 @@ export function PricingTable() {
           </article>
         ))}
       </div>
-      <p className="pricing-note"><ShieldCheck weight="fill" /> Paid plans include a 5-day easy refund policy. Checkout delivers a License Code, not a web account.</p>
+      <p className="pricing-note"><ShieldCheck weight="fill" /> *A safety limit of 50 conditions per Form applies. Checkout delivers a License Code, not a web account.</p>
     </div>
   )
 }
